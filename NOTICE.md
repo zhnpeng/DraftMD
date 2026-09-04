@@ -4,7 +4,9 @@
 
 DraftMD is a modified derivative of [ColaMD](https://github.com/marswaveai/ColaMD).
 
-ColaMD is copyright © 2026 marswave.ai and is distributed under the MIT License. The original copyright notice and MIT permission notice are preserved in [LICENSE](LICENSE). DraftMD contains modifications made by DraftMD contributors.
+ColaMD is copyright © 2026 marswave.ai and is distributed under the MIT License. The original copyright notice and MIT permission notice are preserved verbatim in [LICENSE](LICENSE).
+
+DraftMD modifications are copyright © 2026 DraftMD contributors and are distributed under the same MIT License.
 
 References in this repository to ColaMD issues, releases, or earlier version numbers document upstream history and provenance. They do not identify issues or releases of the DraftMD repository unless explicitly stated.
 
