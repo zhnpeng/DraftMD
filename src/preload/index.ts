@@ -12,6 +12,7 @@ import {
   type IpcSendMap,
   type Unsubscribe,
 } from '../shared/contracts'
+import { streamSaveChunks } from './save-stream'
 
 export type { DraftMDAPI, SiblingFile } from '../shared/contracts'
 
@@ -129,12 +130,14 @@ async function saveContent(
   }
   if (content.length > MAX_SAVE_STREAM_LENGTH) throw contractError('save-stream-begin')
   const uploadId = await invoke('save-stream-begin', { mode, totalLength: content.length, expectedPath, rebuildMenu })
-  let index = 0
-  for (let offset = 0; offset < content.length; offset += SAVE_STREAM_CHUNK_LENGTH) {
-    const accepted = await invoke('save-stream-chunk', uploadId, index, content.slice(offset, offset + SAVE_STREAM_CHUNK_LENGTH))
-    if (!accepted) throw contractError('save-stream-chunk')
-    index += 1
-  }
+  const accepted = await streamSaveChunks({
+    content,
+    chunkLength: SAVE_STREAM_CHUNK_LENGTH,
+    yieldEvery: 8,
+    sendChunk: (index, chunk) => invoke('save-stream-chunk', uploadId, index, chunk),
+    yieldControl: () => new Promise<void>((resolve) => setTimeout(resolve, 0)),
+  })
+  if (!accepted) throw contractError('save-stream-chunk')
   return invoke('save-stream-commit', uploadId)
 }
 
