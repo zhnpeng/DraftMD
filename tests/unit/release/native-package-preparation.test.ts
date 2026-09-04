@@ -1,9 +1,15 @@
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   KEYRING_PACKAGES,
+  findSymlinks,
   lockedPackage,
+  runtimeClosure,
+  runtimePackageRoots,
+  stageLegalNotices,
   verifyIntegrity,
 } from '../../../scripts/prepare-native-packages.js'
 
@@ -35,29 +41,31 @@ describe('Universal native package preparation', () => {
   })
 })
 
-it('extracts only bare runtime package roots from built CommonJS', async () => {
-  const { runtimePackageRoots } = await import('../../../scripts/prepare-native-packages.js')
+it('extracts only bare runtime package roots from built CommonJS', () => {
   expect(runtimePackageRoots(`
     require('node:fs'); require('path'); require('electron'); require('./local');
     require('@scope/package/subpath'); require('plain/subpath');
   `)).toEqual(['@scope/package', 'plain'])
 })
 
-it('keeps the current main runtime roots free of renderer-only packages', async () => {
-  const { runtimePackageRoots } = await import('../../../scripts/prepare-native-packages.js')
-  const { readdirSync } = await import('node:fs')
-  const files = ['dist/main/index.js', ...readdirSync('dist/main/chunks').filter((name) => name.endsWith('.js')).map((name) => `dist/main/chunks/${name}`)]
-  const roots = [...new Set(files.flatMap((file) => runtimePackageRoots(readFileSync(file, 'utf8'))))].sort()
-  expect(roots).toEqual([])
-  expect(roots.some((name) => /milkdown|mermaid|katex/.test(name))).toBe(false)
-  for (const file of [
-    '.build/package/node_modules/better-sqlite3/prebuilds/darwin-arm64.node',
-    '.build/package/node_modules/better-sqlite3/prebuilds/darwin-x64.node',
-    '.build/package/node_modules/@napi-rs/keyring-darwin-arm64/keyring.darwin-arm64.node',
-    '.build/package/node_modules/@napi-rs/keyring-darwin-x64/keyring.darwin-x64.node',
-  ]) expect(() => readFileSync(file)).not.toThrow()
+it('builds an empty runtime closure from a clean fixture with no runtime packages', () => {
+  const root = mkdtempSync(join(tmpdir(), 'draftmd-runtime-closure-'))
+  try {
+    mkdirSync(join(root, 'dist/main/chunks'), { recursive: true })
+    writeFileSync(join(root, 'package.json'), '{"name":"fixture"}\n')
+    writeFileSync(join(root, 'dist/main/index.js'), "require('node:fs')\n")
+    expect([...runtimeClosure(root)]).toEqual([])
+  } finally { rmSync(root, { recursive: true, force: true }) }
 })
 
+it('detects symlinks in a clean runtime fixture', () => {
+  const root = mkdtempSync(join(tmpdir(), 'draftmd-runtime-links-'))
+  try {
+    writeFileSync(join(root, 'target'), 'target')
+    symlinkSync('target', join(root, 'link'))
+    expect(findSymlinks(root)).toEqual([join(root, 'link')])
+  } finally { rmSync(root, { recursive: true, force: true }) }
+})
 
 it('keeps the packaging Electron version aligned with the installed runtime', () => {
   const builder = readFileSync('electron-builder.yml', 'utf8')
@@ -66,15 +74,15 @@ it('keeps the packaging Electron version aligned with the installed runtime', ()
   expect(configured).toBe(installed)
 })
 
-it('produces a runtime stage without symlinks that can escape packaging', async () => {
-  const { findSymlinks, prepareNativePackages } = await import('../../../scripts/prepare-native-packages.js')
-  await prepareNativePackages(process.cwd())
-  expect(findSymlinks('.build/package/node_modules')).toEqual([])
-})
-
-it('stages the project license and attribution for packaged applications', async () => {
-  const { prepareNativePackages } = await import('../../../scripts/prepare-native-packages.js')
-  await prepareNativePackages(process.cwd())
-  expect(readFileSync('.build/package/LICENSE', 'utf8')).toBe(readFileSync('LICENSE', 'utf8'))
-  expect(readFileSync('.build/package/NOTICE.md', 'utf8')).toBe(readFileSync('NOTICE.md', 'utf8'))
+it('stages the project license and attribution from a clean fixture', () => {
+  const root = mkdtempSync(join(tmpdir(), 'draftmd-legal-source-'))
+  const packageRoot = join(root, '.build/package')
+  try {
+    mkdirSync(packageRoot, { recursive: true })
+    writeFileSync(join(root, 'LICENSE'), 'license text\n')
+    writeFileSync(join(root, 'NOTICE.md'), 'notice text\n')
+    stageLegalNotices(root, packageRoot)
+    expect(readFileSync(join(packageRoot, 'LICENSE'), 'utf8')).toBe('license text\n')
+    expect(readFileSync(join(packageRoot, 'NOTICE.md'), 'utf8')).toBe('notice text\n')
+  } finally { rmSync(root, { recursive: true, force: true }) }
 })

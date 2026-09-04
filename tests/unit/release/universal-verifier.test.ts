@@ -1,10 +1,19 @@
+import { mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { architectures, symlinks } from '../../../scripts/verify-universal.js'
+import { normalizeArchitectures, symlinks } from '../../../scripts/verify-universal.js'
 
-it('normalizes the current Universal executable architectures', () => {
-  expect(architectures('release/mac-universal/DraftMD.app/Contents/MacOS/DraftMD').sort()).toEqual(['arm64', 'x64'])
+it('normalizes Universal executable architecture output', () => {
+  expect(normalizeArchitectures('x86_64 arm64\n').sort()).toEqual(['arm64', 'x64'])
 })
 
-it('finds no symlink in the current packaged runtime', () => {
-  expect(symlinks('release/mac-universal/DraftMD.app/Contents/Resources/node_modules')).toEqual([])
+it('detects symlinks in a clean packaged-runtime fixture', () => {
+  const root = mkdtempSync(join(tmpdir(), 'draftmd-universal-links-'))
+  try {
+    writeFileSync(join(root, 'target'), 'target')
+    expect(symlinks(root)).toEqual([])
+    symlinkSync('target', join(root, 'link'))
+    expect(symlinks(root)).toEqual([join(root, 'link')])
+  } finally { rmSync(root, { recursive: true, force: true }) }
 })

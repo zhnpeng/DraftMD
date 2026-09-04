@@ -124,6 +124,11 @@ function findSymlinks(root) {
   return found
 }
 
+function stageLegalNotices(root, packageRoot) {
+  cpSync(join(root, 'LICENSE'), join(packageRoot, 'LICENSE'))
+  cpSync(join(root, 'NOTICE.md'), join(packageRoot, 'NOTICE.md'))
+}
+
 async function prepareNativePackages(root = process.cwd()) {
   const lock = JSON.parse(readFileSync(join(root, 'package-lock.json'), 'utf8'))
   for (const name of KEYRING_PACKAGES) {
@@ -188,8 +193,7 @@ async function prepareNativePackages(root = process.cwd()) {
   cpSync(join(root, 'scripts/afterPack.js'), join(packageRoot, 'scripts/afterPack.js'))
   cpSync(join(root, 'resources'), join(packageRoot, 'resources'), { recursive: true })
   cpSync(join(root, 'electron-builder.yml'), join(packageRoot, 'electron-builder.yml'))
-  cpSync(join(root, 'LICENSE'), join(packageRoot, 'LICENSE'))
-  cpSync(join(root, 'NOTICE.md'), join(packageRoot, 'NOTICE.md'))
+  stageLegalNotices(root, packageRoot)
   const project = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
   const packageMetadata = {
     name: project.name,
@@ -211,7 +215,7 @@ async function prepareNativePackages(root = process.cwd()) {
 
 }
 
-module.exports = { KEYRING_PACKAGES, lockedPackage, verifyIntegrity, runtimePackageRoots, runtimeClosure, findSymlinks, prepareNativePackages }
+module.exports = { KEYRING_PACKAGES, lockedPackage, verifyIntegrity, runtimePackageRoots, runtimeClosure, findSymlinks, stageLegalNotices, prepareNativePackages }
 
 if (require.main === module) {
   prepareNativePackages().then(

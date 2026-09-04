@@ -5,8 +5,12 @@ const { tmpdir } = require('node:os')
 const { mkdtempSync, rmSync, writeFileSync } = require('node:fs')
 const { validatePackagedNativeModules } = require('./afterPack.js')
 
+function normalizeArchitectures(output) {
+  return output.trim().split(/\s+/).filter(Boolean).map((arch) => arch === 'x86_64' ? 'x64' : arch)
+}
+
 function architectures(file) {
-  return execFileSync('lipo', ['-archs', file], { encoding: 'utf8' }).trim().split(/\s+/).map((arch) => arch === 'x86_64' ? 'x64' : arch)
+  return normalizeArchitectures(execFileSync('lipo', ['-archs', file], { encoding: 'utf8' }))
 }
 
 function symlinks(root) {
@@ -34,7 +38,13 @@ function verifyUniversal(root = process.cwd()) {
   const appArchitectures = architectures(executable).sort()
   if (appArchitectures.join(' ') !== 'arm64 x64') throw new Error(`Universal executable has wrong architectures: ${appArchitectures.join(' ')}`)
   validatePackagedNativeModules({ appPath: app, arch: 'universal' })
-  const runtime = join(app, 'Contents/Resources/node_modules')
+  const resources = join(app, 'Contents/Resources')
+  for (const name of ['LICENSE', 'NOTICE.md']) {
+    const source = readFileSync(join(root, name))
+    const packaged = readFileSync(join(resources, name))
+    if (!source.equals(packaged)) throw new Error(`Packaged legal notice differs from source: ${name}`)
+  }
+  const runtime = join(resources, 'node_modules')
   const links = symlinks(runtime)
   if (links.length) throw new Error(`Packaged runtime contains symlink: ${links[0]}`)
   const runtimeRoots = readdirSync(runtime).sort()
@@ -61,7 +71,7 @@ function verifyUniversal(root = process.cwd()) {
   return { app, appArchitectures, runtime }
 }
 
-module.exports = { architectures, symlinks, verifyUniversal }
+module.exports = { normalizeArchitectures, architectures, symlinks, verifyUniversal }
 
 if (require.main === module) {
   const result = verifyUniversal()

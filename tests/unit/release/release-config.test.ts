@@ -61,7 +61,7 @@ it('publishes hyphenated version tags only as unsigned prereleases', () => {
 
 it('uses reviewed release notes that warn unsigned preview users', () => {
   const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
-  const notesPath = 'docs/releases/v0.1.0-preview.1.md'
+  const notesPath = 'docs/releases/v0.1.0-preview.2.md'
   expect(workflow).toContain('body_path: docs/releases/${{ github.ref_name }}.md')
   const notes = readFileSync(notesPath, 'utf8')
   expect(notes).toContain('Unsigned macOS preview')
