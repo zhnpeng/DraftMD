@@ -1,7 +1,7 @@
 {
   "name": "draftmd",
   "productName": "DraftMD",
-  "version": "0.1.0",
+  "version": "0.1.0-preview.1",
   "description": "The open-source macOS AI Markdown editor",
   "main": "dist/main/index.js",
   "license": "MIT",

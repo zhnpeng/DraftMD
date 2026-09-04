@@ -188,6 +188,8 @@ async function prepareNativePackages(root = process.cwd()) {
   cpSync(join(root, 'scripts/afterPack.js'), join(packageRoot, 'scripts/afterPack.js'))
   cpSync(join(root, 'resources'), join(packageRoot, 'resources'), { recursive: true })
   cpSync(join(root, 'electron-builder.yml'), join(packageRoot, 'electron-builder.yml'))
+  cpSync(join(root, 'LICENSE'), join(packageRoot, 'LICENSE'))
+  cpSync(join(root, 'NOTICE.md'), join(packageRoot, 'NOTICE.md'))
   const project = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
   const packageMetadata = {
     name: project.name,

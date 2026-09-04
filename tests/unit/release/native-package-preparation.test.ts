@@ -71,3 +71,10 @@ it('produces a runtime stage without symlinks that can escape packaging', async 
   await prepareNativePackages(process.cwd())
   expect(findSymlinks('.build/package/node_modules')).toEqual([])
 })
+
+it('stages the project license and attribution for packaged applications', async () => {
+  const { prepareNativePackages } = await import('../../../scripts/prepare-native-packages.js')
+  await prepareNativePackages(process.cwd())
+  expect(readFileSync('.build/package/LICENSE', 'utf8')).toBe(readFileSync('LICENSE', 'utf8'))
+  expect(readFileSync('.build/package/NOTICE.md', 'utf8')).toBe(readFileSync('NOTICE.md', 'utf8'))
+})

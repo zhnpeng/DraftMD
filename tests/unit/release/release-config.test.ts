@@ -49,3 +49,22 @@ it('ships upstream license and attribution with packaged applications', () => {
   expect(builder).toMatch(/extraResources:[\s\S]*?- from: NOTICE\.md\n\s+to: NOTICE\.md/)
   expect(builder).toContain('Copyright © 2026 marswave.ai and DraftMD contributors')
 })
+
+it('publishes hyphenated version tags only as unsigned prereleases', () => {
+  const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
+  const stableTag = "startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')"
+  const previewTag = "startsWith(github.ref, 'refs/tags/v') && contains(github.ref_name, '-')"
+  expect(workflow).toContain(`if: ${stableTag}`)
+  expect(workflow).toContain(`if: github.event_name == 'workflow_dispatch' || (${previewTag})`)
+  expect(workflow).toContain("prerelease: ${{ contains(github.ref_name, '-') }}")
+})
+
+it('uses reviewed release notes that warn unsigned preview users', () => {
+  const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
+  const notesPath = 'docs/releases/v0.1.0-preview.1.md'
+  expect(workflow).toContain('body_path: docs/releases/${{ github.ref_name }}.md')
+  const notes = readFileSync(notesPath, 'utf8')
+  expect(notes).toContain('Unsigned macOS preview')
+  expect(notes).toContain('not notarized')
+  expect(notes).toContain('Control-click')
+})
