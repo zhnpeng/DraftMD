@@ -51,7 +51,14 @@ Signing and notarization require the Apple credentials referenced by the release
 - [Release checklist](docs/release-checklist.md)
 - [Privacy](docs/privacy.md)
 - [Provider compatibility](docs/provider-compatibility.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
+- [Notices and attribution](NOTICE.md)
+
+## Project origin
+
+DraftMD is a modified derivative of [ColaMD](https://github.com/marswaveai/ColaMD), originally developed by marswave.ai and released under the MIT License. DraftMD preserves the upstream copyright and license notice. See [NOTICE.md](NOTICE.md) for provenance and bundled third-party notices.
 
 ## License
 
-[MIT](LICENSE). DraftMD includes software derived from ColaMD; see the license file for attribution.
+[MIT](LICENSE). Copyright and attribution details are preserved in the license and notice files.

@@ -1,7 +1,7 @@
 electronVersion: '44.1.0'
 appId: app.draftmd.desktop
 productName: DraftMD
-copyright: Copyright © 2026 DraftMD contributors
+copyright: Copyright © 2026 marswave.ai and DraftMD contributors
 
 directories:
   output: ../../release
@@ -17,6 +17,10 @@ extraResources:
     to: templates
   - from: resources/demo
     to: demo
+  - from: LICENSE
+    to: LICENSE
+  - from: NOTICE.md
+    to: NOTICE.md
 
 afterPack: ./scripts/afterPack.js
 

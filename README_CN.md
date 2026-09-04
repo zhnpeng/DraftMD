@@ -51,7 +51,14 @@ npm run dist:mac
 - [发布检查清单](docs/release-checklist.md)
 - [隐私说明](docs/privacy.md)
 - [模型服务兼容性](docs/provider-compatibility.md)
+- [参与贡献](CONTRIBUTING.md)
+- [安全政策](SECURITY.md)
+- [来源与归属](NOTICE.md)
+
+## 项目来源
+
+DraftMD 是 [ColaMD](https://github.com/marswaveai/ColaMD) 的修改衍生项目。ColaMD 最初由 marswave.ai 开发并以 MIT 协议发布；DraftMD 保留上游版权与许可声明。项目来源和内嵌第三方软件信息见 [NOTICE.md](NOTICE.md)。
 
 ## 开源协议
 
-[MIT](LICENSE)。DraftMD 包含源自 ColaMD 的软件，完整归属信息见协议文件。
+[MIT](LICENSE)。版权和归属信息保留在协议与通知文件中。

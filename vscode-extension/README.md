@@ -1,6 +1,6 @@
 # ColaMD VS Code Extension (MVP)
 
-> Open the current Markdown file in [ColaMD](https://colamd.com/) — the Markdown-as-Database editor with live file watching.
+> Open the current Markdown file in [ColaMD](https://github.com/zhnpeng/DraftMD) — the Markdown-as-Database editor with live file watching.
 
 ## What it does
 

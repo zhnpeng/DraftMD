@@ -2,6 +2,8 @@
 
 This is the holding list for requests that have a clear user need but are not committed roadmap work. Entries stay here until they are accepted into a release plan or explicitly declined.
 
+Issue links under `marswaveai/ColaMD` are preserved as upstream history and provenance. They are not DraftMD issue numbers.
+
 ## Implemented On Main
 
 These features are implemented on `main` and await release verification.

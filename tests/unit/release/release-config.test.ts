@@ -42,3 +42,10 @@ it('links release, privacy, and provider compatibility documentation', () => {
     expect(readFileSync('README_CN.md', 'utf8')).toContain(file)
   }
 })
+
+it('ships upstream license and attribution with packaged applications', () => {
+  const builder = readFileSync('electron-builder.yml', 'utf8')
+  expect(builder).toMatch(/extraResources:[\s\S]*?- from: LICENSE\n\s+to: LICENSE/)
+  expect(builder).toMatch(/extraResources:[\s\S]*?- from: NOTICE\.md\n\s+to: NOTICE\.md/)
+  expect(builder).toContain('Copyright © 2026 marswave.ai and DraftMD contributors')
+})

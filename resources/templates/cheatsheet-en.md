@@ -20,7 +20,7 @@ Source: `**bold**`, `*italic*`, `~~strikethrough~~`, and `==highlight==`.
 
 ## Links and images
 
-[DraftMD](https://github.com/marswaveai/ColaMD)
+[DraftMD](https://github.com/zhnpeng/DraftMD)
 
 Hold Cmd / Ctrl while clicking a link to open it in your browser.
 
