@@ -32,7 +32,7 @@ test('opens and edits a 5 MiB mixed Markdown document without a one-second rende
       const observer = new PerformanceObserver((list) => {
         durations.push(...list.getEntries().map((entry) => entry.duration))
       })
-      observer.observe({ type: 'longtask', buffered: true })
+      observer.observe({ type: 'longtask' })
       Object.assign(window, { __draftmdLongTasks: { durations, observer } })
     })
     const editStarted = performance.now()
