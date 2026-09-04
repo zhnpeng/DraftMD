@@ -50,6 +50,7 @@ test('keeps provider SDK code in dynamic chunks and unloaded during cold editor 
     budgetMs: foundationBaselineMs * (1 + maximumRegression),
     loadedProviderModules: measured.flatMap((item) => item.loadedProviderModules),
   }
+  console.log(`startup metrics: ${JSON.stringify(result)}`)
   await import('node:fs/promises').then(({ mkdir, writeFile }) => mkdir('artifacts/performance', { recursive: true }).then(() => writeFile('artifacts/performance/startup.json', JSON.stringify(result, null, 2))))
   expect(result.loadedProviderModules).toEqual([])
   expect(medianMs).toBeLessThanOrEqual(result.budgetMs)

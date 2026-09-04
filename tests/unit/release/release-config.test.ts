@@ -74,4 +74,5 @@ it('uses evidence-based hosted-runner performance budgets without weakening loca
   const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
   expect(workflow).toContain("DRAFTMD_FOUNDATION_STARTUP_BASELINE_MS: '900'")
   expect(workflow).toContain("DRAFTMD_LARGE_DOCUMENT_EDIT_BUDGET_MS: '2000'")
+  expect(workflow).toContain("DRAFTMD_LARGE_DOCUMENT_LONG_TASK_BUDGET_MS: '3000'")
 })

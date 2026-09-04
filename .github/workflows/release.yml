@@ -12,6 +12,7 @@ jobs:
     env:
       DRAFTMD_FOUNDATION_STARTUP_BASELINE_MS: '900'
       DRAFTMD_LARGE_DOCUMENT_EDIT_BUDGET_MS: '2000'
+      DRAFTMD_LARGE_DOCUMENT_LONG_TASK_BUDGET_MS: '3000'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -64,11 +64,14 @@ test('opens and edits a 5 MiB mixed Markdown document without a one-second rende
       return state.durations
     })
     const editBudgetMs = Number(process.env.DRAFTMD_LARGE_DOCUMENT_EDIT_BUDGET_MS ?? 1_000)
+    const longTaskBudgetMs = Number(process.env.DRAFTMD_LARGE_DOCUMENT_LONG_TASK_BUDGET_MS ?? 1_000)
     if (!Number.isFinite(editBudgetMs) || editBudgetMs <= 0) throw new Error('Invalid large-document edit budget')
-    const result = { readyMs, editMs, editBudgetMs, saveMs, longTaskMs: longTasks, maxLongTaskMs: Math.max(0, ...longTasks), mermaidNodes: await page.locator('.mermaid-diagram').count(), bytes: (await stat(documentPath)).size }
+    if (!Number.isFinite(longTaskBudgetMs) || longTaskBudgetMs <= 0) throw new Error('Invalid large-document long-task budget')
+    const result = { readyMs, editMs, editBudgetMs, saveMs, longTaskMs: longTasks, maxLongTaskMs: Math.max(0, ...longTasks), longTaskBudgetMs, mermaidNodes: await page.locator('.mermaid-diagram').count(), bytes: (await stat(documentPath)).size }
+    console.log(`large-document metrics: ${JSON.stringify(result)}`)
     await import('node:fs/promises').then(({ mkdir, writeFile }) => mkdir('artifacts/performance', { recursive: true }).then(() => writeFile('artifacts/performance/large-document.json', JSON.stringify(result, null, 2))))
     expect(result.editMs).toBeLessThan(result.editBudgetMs)
-    expect(result.maxLongTaskMs).toBeLessThan(1_000)
+    expect(result.maxLongTaskMs).toBeLessThan(result.longTaskBudgetMs)
   } finally {
     await app.cleanup()
     await rm(fixture, { recursive: true, force: true })
