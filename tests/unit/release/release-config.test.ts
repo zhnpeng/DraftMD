@@ -76,3 +76,10 @@ it('uses evidence-based hosted-runner performance budgets without weakening loca
   expect(workflow).toContain("DRAFTMD_LARGE_DOCUMENT_EDIT_BUDGET_MS: '2000'")
   expect(workflow).toContain("DRAFTMD_LARGE_DOCUMENT_LONG_TASK_BUDGET_MS: '3000'")
 })
+
+it('checks out reviewed release notes before creating a GitHub Release', () => {
+  const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
+  const releaseJob = workflow.slice(workflow.indexOf('\n  release:'))
+  expect(releaseJob.indexOf('uses: actions/checkout@v4')).toBeGreaterThan(-1)
+  expect(releaseJob.indexOf('uses: actions/checkout@v4')).toBeLessThan(releaseJob.indexOf('body_path: docs/releases/${{ github.ref_name }}.md'))
+})
