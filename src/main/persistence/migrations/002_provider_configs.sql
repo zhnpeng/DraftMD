@@ -1,0 +1,10 @@
+alter table provider_configs add column preset text not null default 'none';
+alter table provider_configs add column header_credential_refs_json text not null default '{}';
+alter table provider_configs add column timeout_ms integer not null default 60000;
+alter table provider_configs add column stream_enabled integer not null default 1;
+alter table provider_configs add column tools_enabled integer not null default 1;
+alter table provider_configs add column insecure_http_approved integer not null default 0;
+alter table provider_configs add column capability text not null default 'unavailable';
+alter table provider_configs add column last_tested_at text;
+alter table provider_configs add column last_test_error_code text;
+alter table provider_configs add column is_default integer not null default 0;

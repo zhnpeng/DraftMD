@@ -1,0 +1,57 @@
+/* ===== DraftMD Theme: 雅致 Elegant =====
+   Warm serif with terracotta accents, inspired by classic writing apps.
+
+   Variables target :root; element rules target the DraftMD editor DOM. */
+
+:root {
+  --bg-color: #f0edea;
+  --text-color: #2c2c2c;
+  --text-secondary: #6c6c6c;
+  --text-muted: #777;
+  --border-color: #d8d3ce;
+  --link-color: #bc4424;
+  --code-bg: #e8e4df;
+  --code-block-bg: #2c2c2c;
+  --code-block-text: #e0dcd7;
+  --blockquote-border: #c44b2b;
+  --blockquote-bg: #eae6e1;
+  --table-header-bg: #eae6e1;
+  --table-border: #d8d3ce;
+  --selection-bg: rgba(196, 75, 43, 0.2);
+  --highlight-bg: #f0d9a8;
+}
+
+#editor .ProseMirror {
+  font-family: 'LXGW WenKai', 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', Georgia, serif;
+  line-height: 1.9;
+}
+
+#editor .ProseMirror strong {
+  color: #c44b2b;
+}
+
+#editor .ProseMirror code {
+  color: #c44b2b;
+}
+
+#editor .ProseMirror pre {
+  color: var(--code-block-text);
+}
+
+#editor .ProseMirror pre code {
+  color: inherit;
+}
+
+#editor .ProseMirror blockquote {
+  background: var(--blockquote-bg);
+  padding: 15px 20px 15px 25px;
+}
+
+#editor .ProseMirror table th {
+  border-bottom: 2px solid #c44b2b;
+}
+
+#editor .ProseMirror table td {
+  border-left: none;
+  border-right: none;
+}

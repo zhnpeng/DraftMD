@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "module": "Node16",
+    "moduleResolution": "node16",
+    "target": "ES2022",
+    "outDir": "dist/preload",
+    "rootDir": "src"
+  },
+  "include": [
+    "src/preload/**/*",
+    "src/shared/**/*"
+  ]
+}

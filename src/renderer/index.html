@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https: http: file:;">
+  <title data-i18n="app.name">DraftMD</title>
+  <!-- Keep the titlebar stable before the renderer CSS bundle loads. -->
+  <style>
+    #titlebar { height: 40px; position: relative; -webkit-app-region: drag; }
+    #titlebar > button, #agent-dot { position: absolute; -webkit-app-region: no-drag; }
+    #titlebar > button { border: 0; background: transparent; color: inherit; display: flex; align-items: center; justify-content: center; }
+    #word-count, #source-toggle-btn, #file-toggle-btn { top: 6px; width: 28px; height: 28px; }
+    #word-count { right: 32px; }
+    #source-toggle-btn { right: 68px; }
+    #file-toggle-btn { right: 104px; }
+    #agent-dot { top: 16px; right: 16px; width: 8px; height: 8px; border-radius: 50%; background: rgba(127, 127, 127, 0.3); }
+    #title-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: calc(100% - 300px); display: flex; align-items: center; gap: 8px; pointer-events: none; }
+    #file-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; pointer-events: none; }
+    #save-status { flex-shrink: 0; font-size: 11px; line-height: 1.3; color: rgba(127, 127, 127, 0.9); opacity: 0; transition: opacity 0.4s ease; pointer-events: none; }
+    .toolbar-tip { position: absolute; opacity: 0; pointer-events: none; }
+    #editor { height: calc(100vh - 40px); }
+    #source-editor { display: none; }
+  </style>
+</head>
+<body>
+  <div id="titlebar">
+    <div id="title-center">
+      <span id="file-title" data-i18n="document.untitled">Untitled</span>
+      <span id="save-status" aria-live="polite"></span>
+    </div>
+    <div id="agent-dot" data-i18n-aria-label="agent.state" aria-label="Agent status">
+      <span class="toolbar-tip" data-i18n="agent.state">Agent status</span>
+    </div>
+    <button id="word-count" data-i18n-aria-label="toolbar.documentStats" aria-label="Document statistics">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/>
+        <line x1="4.5" y1="6" x2="11.5" y2="6"/>
+        <line x1="4.5" y1="9" x2="9.5" y2="9"/>
+      </svg>
+      <span class="toolbar-tip word-count-tip" data-i18n="document.stats" data-i18n-vars='{"characters":0,"words":0,"paragraphs":0}'>0 characters · 0 words · 0 paragraphs</span>
+    </button>
+    <button id="source-toggle-btn" data-i18n-aria-label="editor.sourceOrVisual" aria-label="Switch Markdown source / visual editor">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="5.5 4.5 2 8 5.5 11.5"/>
+        <polyline points="10.5 4.5 14 8 10.5 11.5"/>
+      </svg>
+      <span class="toolbar-tip" data-i18n="editor.sourceOrVisual">Switch Markdown source / visual editor</span>
+    </button>
+    <button id="file-toggle-btn" data-i18n-aria-label="files.toggle" aria-label="Show / hide file list">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+        <rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/>
+        <line x1="5.3" y1="3" x2="5.3" y2="13"/>
+      </svg>
+      <span class="toolbar-tip" data-i18n="files.toggleShortcut">Show / hide file list (⌘⇧B)</span>
+    </button>
+  </div>
+  <aside id="file-panel" hidden>
+    <div class="file-panel-tabs" role="tablist" data-i18n-aria-label="files.sidebar" aria-label="Sidebar content">
+      <button id="file-panel-files" class="active" type="button" role="tab" aria-selected="true" data-i18n="files.title">Files</button>
+      <button id="file-panel-outline" type="button" role="tab" aria-selected="false" data-i18n="files.outline">Outline</button>
+    </div>
+    <ul id="file-list"></ul>
+    <ul id="outline-list" hidden></ul>
+  </aside>
+  <div id="editor"></div>
+  <textarea id="source-editor" spellcheck="false"></textarea>
+  <div id="reduced-rendering-banner" role="status" hidden>
+    <span data-i18n="document.reducedRendering">Large document: using full Markdown source mode to stay responsive. Content and saving are preserved.</span>
+  </div>
+  <div id="database-warning" role="status" hidden>
+    <span id="database-warning-text"></span>
+    <button id="database-warning-dismiss" type="button" data-i18n-aria-label="common.close" aria-label="Close">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+        <line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/>
+      </svg>
+    </button>
+  </div>
+  <div id="update-banner" hidden>
+    <span id="update-banner-text" data-i18n="update.available" data-i18n-vars='{"version":""}'>New version available</span>
+    <button id="update-banner-action" type="button" data-i18n="update.action">Update</button>
+    <button id="update-banner-dismiss" type="button" data-i18n-aria-label="update.dismiss" aria-label="Dismiss">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+        <line x1="2" y1="2" x2="10" y2="10"/><line x1="10" y1="2" x2="2" y2="10"/>
+      </svg>
+    </button>
+  </div>
+  <section id="agent-dock" aria-label="AI task dock" data-i18n-aria-label="dock.label">
+    <div id="agent-dock-resize" role="separator" aria-orientation="horizontal" aria-label="Resize AI task dock" data-i18n-aria-label="dock.resize" tabindex="0" hidden></div>
+    <div id="agent-dock-expanded" hidden>
+      <header class="agent-dock-header">
+        <div class="agent-menu-anchor"><button id="agent-session-button" type="button" data-i18n="dock.newSession" aria-haspopup="menu" aria-expanded="false">New conversation</button><div id="agent-session-menu" class="agent-menu agent-session-menu" role="menu" hidden></div></div>
+        <span id="agent-task-status" aria-live="polite" data-i18n="dock.ready">Ready</span>
+        <button id="agent-stop-button" type="button" data-i18n="agent.stop" hidden>Stop task</button>
+        <button id="agent-collapse-button" type="button" data-i18n-aria-label="dock.collapse" aria-label="Collapse AI task dock">
+          <svg viewBox="0 0 16 16"><path d="m4 6 4 4 4-4"/></svg>
+        </button>
+      </header>
+      <div id="agent-message-log" role="log" aria-live="polite" aria-relevant="additions text"></div>
+      <div id="agent-activity-list" aria-label="Task activity" data-i18n-aria-label="dock.activity"></div>
+      <div id="agent-approval-panel" hidden></div>
+      <div id="agent-change-summary" hidden></div>
+      <div id="agent-recovery-panel" hidden></div>
+    </div>
+    <div class="agent-input-row">
+      <div class="agent-menu-anchor"><button id="agent-model-button" type="button" data-i18n="dock.configureModel" aria-haspopup="menu" aria-expanded="false">Configure model</button><div id="agent-model-menu" class="agent-menu agent-model-menu" role="menu" hidden></div></div>
+      <div id="agent-selection-chip" hidden></div>
+      <textarea id="agent-input" rows="1" data-i18n-placeholder="dock.placeholder" placeholder="Ask DraftMD…"></textarea>
+      <button id="agent-send-button" type="button" data-i18n-aria-label="dock.send" aria-label="Send task">
+        <svg viewBox="0 0 16 16"><path d="M2.5 8 13 2.5 10 13 7.5 8.5z"/></svg>
+      </button>
+    </div>
+  </section>
+  <dialog id="agent-session-delete-dialog" class="agent-confirm-dialog" aria-labelledby="agent-session-delete-title">
+    <h2 id="agent-session-delete-title" data-i18n="dock.deleteSessionTitle">Delete conversation?</h2>
+    <p data-i18n="dock.deleteSessionBody">This removes its local history and tasks. Markdown files are not changed.</p>
+    <div class="agent-confirm-actions">
+      <button id="agent-session-delete-cancel" type="button" data-i18n="common.cancel">Cancel</button>
+      <button id="agent-session-delete-confirm" type="button" class="danger" data-i18n="dock.deleteSession">Delete</button>
+    </div>
+  </dialog>
+  <dialog id="provider-settings" class="provider-settings" aria-labelledby="provider-settings-title">
+    <div class="provider-settings-header">
+      <h2 id="provider-settings-title" data-i18n="provider.title">Model Settings</h2>
+      <button type="button" data-provider-close data-i18n-aria-label="common.close" aria-label="Close">
+        <svg viewBox="0 0 16 16"><path d="M3 3l10 10M13 3 3 13"/></svg>
+      </button>
+    </div>
+    <div class="provider-settings-body">
+      <nav class="provider-settings-list" data-provider-list aria-label="Provider configurations"></nav>
+      <form class="provider-settings-form">
+        <input name="id" type="hidden">
+        <label><span data-i18n="provider.name">Name</span><input name="name" required maxlength="256"></label>
+        <label><span data-i18n="provider.kind">Provider</span><select name="kind">
+          <option value="anthropic">Anthropic</option><option value="openai">OpenAI</option><option value="openai-compatible">OpenAI-compatible</option>
+        </select></label>
+        <label><span data-i18n="provider.preset">Preset</span><select name="preset">
+          <option value="none" data-i18n="provider.preset.none">None</option><option value="ollama">Ollama</option><option value="lm-studio">LM Studio</option>
+        </select></label>
+        <label><span data-i18n="provider.endpoint">Endpoint</span><input name="baseUrl" type="url" required></label>
+        <label><span data-i18n="provider.model">Model</span><input name="model" required></label>
+        <div class="provider-secret-row">
+          <span data-i18n="provider.apiKey">API Key</span>
+          <span data-api-key-state></span>
+          <input name="apiKey" type="password" autocomplete="new-password">
+          <button type="button" data-replace-secret data-i18n="provider.secret.replace">Replace</button>
+          <button type="button" data-remove-secret data-i18n="provider.secret.remove">Remove</button>
+        </div>
+        <label><span data-i18n="provider.headerName">Secret Header</span><input name="headerName" placeholder="X-API-Key"></label>
+        <label><span data-i18n="provider.headerValue">Header Value</span><input name="headerValue" type="password" autocomplete="new-password"></label>
+        <p class="provider-connection-note" data-provider-connection-note></p>
+        <label class="provider-check"><input name="privacyDisclosure" type="checkbox"><span data-i18n="provider.privacy.disclosure">I understand that task content is sent to this model service.</span></label>
+        <label class="provider-check"><input name="insecureHttpApproved" type="checkbox"><span data-i18n="provider.http.approval">Allow public HTTP endpoint for this host.</span></label>
+        <p class="provider-status" data-provider-status aria-live="polite"></p>
+        <div class="provider-form-actions">
+          <button type="button" data-provider-new data-i18n="provider.new">New</button>
+          <button type="button" data-provider-delete data-i18n="provider.delete">Delete</button>
+          <button type="button" data-provider-default data-i18n="provider.default">Set Default</button>
+          <button type="button" data-provider-test data-i18n="provider.test">Test</button>
+          <button type="submit" class="primary" data-i18n="common.save">Save</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

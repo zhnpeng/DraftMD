@@ -1,0 +1,46 @@
+electronVersion: '44.1.0'
+appId: app.draftmd.desktop
+productName: DraftMD
+copyright: Copyright © 2026 DraftMD contributors
+
+directories:
+  output: ../../release
+  buildResources: resources
+
+files:
+  - dist/**/*
+
+extraResources:
+  - from: node_modules
+    to: node_modules
+  - from: resources/templates
+    to: templates
+  - from: resources/demo
+    to: demo
+
+afterPack: ./scripts/afterPack.js
+
+fileAssociations:
+  - ext: md
+    name: Markdown Document
+    role: Editor
+    mimeType: text/markdown
+  - ext: markdown
+    name: Markdown Document
+    role: Editor
+    mimeType: text/markdown
+
+mac:
+  target:
+    - dmg
+    - zip
+  minimumSystemVersion: '13.0.0'
+  category: public.app-category.productivity
+  icon: icon.icns
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+  notarize: true
+  singleArchFiles: 'node_modules/{better-sqlite3/prebuilds,@napi-rs/keyring-darwin-*}/**/*'
+  x64ArchFiles: 'Contents/Resources/node_modules/{better-sqlite3/prebuilds,@napi-rs/keyring-darwin-*}/**/*'
