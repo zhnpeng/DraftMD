@@ -42,3 +42,16 @@ describe('renderer autosave retry scheduling', () => {
     expect(save).toHaveBeenCalledTimes(2)
   })
 })
+
+it('cancels a pending autosave when manual Save takes ownership', async () => {
+  vi.useFakeTimers()
+  const save = vi.fn()
+  const scheduler = createAutosaveScheduler(save)
+
+  scheduler.schedule()
+  scheduler.rearmForManualSave()
+  await vi.advanceTimersByTimeAsync(1_000)
+
+  expect(save).not.toHaveBeenCalled()
+  expect(scheduler.isPaused()).toBe(false)
+})

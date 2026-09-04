@@ -38,7 +38,7 @@ export function createAutosaveScheduler(
       cancelPending()
     },
     rearmForEdit: rearm,
-    rearmForManualSave: rearm,
+    rearmForManualSave() { cancelPending(); rearm() },
     isPaused: () => paused,
   }
 }
