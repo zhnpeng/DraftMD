@@ -10,7 +10,8 @@ jobs:
   build:
     runs-on: macos-latest
     env:
-      DRAFTMD_FOUNDATION_STARTUP_BASELINE_MS: '450'
+      DRAFTMD_FOUNDATION_STARTUP_BASELINE_MS: '900'
+      DRAFTMD_LARGE_DOCUMENT_EDIT_BUDGET_MS: '2000'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

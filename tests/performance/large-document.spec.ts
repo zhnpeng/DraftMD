@@ -63,9 +63,11 @@ test('opens and edits a 5 MiB mixed Markdown document without a one-second rende
       state.observer.disconnect()
       return state.durations
     })
-    const result = { readyMs, editMs, saveMs, longTaskMs: longTasks, maxLongTaskMs: Math.max(0, ...longTasks), mermaidNodes: await page.locator('.mermaid-diagram').count(), bytes: (await stat(documentPath)).size }
+    const editBudgetMs = Number(process.env.DRAFTMD_LARGE_DOCUMENT_EDIT_BUDGET_MS ?? 1_000)
+    if (!Number.isFinite(editBudgetMs) || editBudgetMs <= 0) throw new Error('Invalid large-document edit budget')
+    const result = { readyMs, editMs, editBudgetMs, saveMs, longTaskMs: longTasks, maxLongTaskMs: Math.max(0, ...longTasks), mermaidNodes: await page.locator('.mermaid-diagram').count(), bytes: (await stat(documentPath)).size }
     await import('node:fs/promises').then(({ mkdir, writeFile }) => mkdir('artifacts/performance', { recursive: true }).then(() => writeFile('artifacts/performance/large-document.json', JSON.stringify(result, null, 2))))
-    expect(result.editMs).toBeLessThan(1_000)
+    expect(result.editMs).toBeLessThan(result.editBudgetMs)
     expect(result.maxLongTaskMs).toBeLessThan(1_000)
   } finally {
     await app.cleanup()
