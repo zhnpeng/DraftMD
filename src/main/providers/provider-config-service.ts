@@ -4,8 +4,10 @@ import type { ProviderConfigRecord } from '../persistence/provider-config-reposi
 import { uuidv7 } from '../persistence/ids'
 import { validateProviderEndpoint } from './endpoint-policy'
 import { sameProviderConnection } from './provider-connection'
+import { providerApiMode, type ProviderApiMode } from '../../shared/contracts/provider'
 
 export interface ProviderConfigInput {
+  apiMode?: ProviderApiMode
   id?: string
   name: string
   kind: ProviderConfig['kind']
@@ -26,6 +28,7 @@ export interface ProviderSecretsInput {
 }
 
 export interface ProviderConfigDTO {
+  apiMode?: ProviderApiMode
   id: string
   name: string
   kind: ProviderConfig['kind']
@@ -60,7 +63,7 @@ export interface ProviderConfigServiceDependencies {
 }
 
 export class ProviderConfigServiceError extends Error {
-  constructor(readonly code: 'DUPLICATE_HEADER' | 'CONFIG_NOT_FOUND') {
+  constructor(readonly code: 'DUPLICATE_HEADER' | 'CONFIG_NOT_FOUND' | 'CREDENTIALS_REENTRY_REQUIRED') {
     super(code)
     this.name = 'ProviderConfigServiceError'
   }
@@ -79,6 +82,7 @@ function normalizeHeaders(headers: Record<string, string> = {}): Record<string, 
 function dto(config: ProviderConfigRecord): ProviderConfigDTO {
   return {
     id: config.id, name: config.name, kind: config.kind, preset: config.preset,
+    apiMode: providerApiMode(config),
     baseUrl: config.baseUrl, model: config.model, timeoutMs: config.timeoutMs,
     streamEnabled: config.streamEnabled, toolsEnabled: config.toolsEnabled,
     insecureHttpApproved: config.insecureHttpApproved, capability: config.capability,
@@ -99,6 +103,12 @@ export function createProviderConfigService(deps: ProviderConfigServiceDependenc
       const id = input.id ? UUIDv7Schema.parse(input.id) : uuidv7()
       const existing = deps.repository.get(id)
       const normalizedHeaders = normalizeHeaders(secrets.headers)
+      if (existing && (existing.kind !== input.kind || new URL(existing.baseUrl).href.replace(/\/$/, '') !== new URL(input.baseUrl).href.replace(/\/$/, ''))) {
+        const retainKey = existing.credentialRef && !secrets.removeApiKey && !secrets.apiKey
+        const removed = new Set((secrets.removeHeaders ?? []).map(name => name.trim().toLowerCase()))
+        const retainHeaders = Object.keys(existing.headerCredentialRefs).some(name => !removed.has(name) && !normalizedHeaders[name])
+        if (retainKey || retainHeaders) throw new ProviderConfigServiceError('CREDENTIALS_REENTRY_REQUIRED')
+      }
       const createdRefs: string[] = []
       const replacedRefs: string[] = []
       let credentialRef = existing?.credentialRef ?? null
@@ -132,6 +142,7 @@ export function createProviderConfigService(deps: ProviderConfigServiceDependenc
         const timestamp = now()
         const config = ProviderConfigSchema.parse({
           id, name: input.name, kind: input.kind, preset: input.preset, baseUrl: input.baseUrl,
+          apiMode: input.apiMode ?? existing?.apiMode ?? providerApiMode(input),
           model: input.model, credentialRef, headerCredentialRefs, timeoutMs: input.timeoutMs,
           streamEnabled: input.streamEnabled, toolsEnabled: input.toolsEnabled,
           insecureHttpApproved: input.insecureHttpApproved,

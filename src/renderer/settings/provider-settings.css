@@ -10,18 +10,27 @@
   box-shadow: 0 18px 56px rgba(0, 0, 0, 0.22);
 }
 .provider-settings::backdrop { background: rgba(0, 0, 0, 0.28); }
+.provider-settings[open] { display: flex; flex-direction: column; }
+.provider-settings-header { flex: 0 0 52px; }
 .provider-settings-header { height: 52px; padding: 0 14px 0 20px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-color); }
 .provider-settings-header h2 { font-size: 15px; font-weight: 600; }
 .provider-settings-header button { width: 28px; height: 28px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); }
 .provider-settings-header button:hover { background: rgba(127, 127, 127, 0.14); color: var(--text-color); }
 .provider-settings-header svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.3; stroke-linecap: round; }
-.provider-settings-body { display: grid; grid-template-columns: 210px minmax(0, 1fr); height: calc(100% - 52px); }
+.provider-settings-body { display: grid; grid-template-columns: 210px minmax(0, 1fr); flex: 1; min-height: 0; }
+.provider-settings-editor { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
 .provider-settings-list { padding: 10px 8px; overflow-y: auto; border-right: 1px solid var(--border-color); }
 .provider-settings-list button { width: 100%; min-height: 40px; padding: 7px 9px; border: 0; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: transparent; color: var(--text-color); text-align: left; }
 .provider-settings-list button:hover, .provider-settings-list button.active { background: rgba(127, 127, 127, 0.12); }
 .provider-badge { font-size: 10px; color: var(--text-secondary); }
 .provider-badge.agent { color: var(--link-color); }
-.provider-settings-form { overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 13px; }
+.provider-settings-form { flex: 1; min-height: 0; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 13px; }
+.provider-settings-form > * { flex-shrink: 0; }
+.provider-settings-form > [hidden] { display: none; }
+.provider-model-control { display: flex; gap: 6px; min-width: 0; }
+.provider-model-control input { flex: 1; width: 0; }
+.provider-model-control button { flex: 0 0 auto; white-space: nowrap; }
+.provider-model-status { margin: 0; padding-left: 124px; font-size: 12px; color: var(--text-secondary); overflow-wrap: anywhere; }
 .provider-settings-form > label { display: grid; grid-template-columns: 112px minmax(0, 1fr); align-items: center; gap: 12px; font-size: 12px; color: var(--text-secondary); }
 .provider-settings-form input, .provider-settings-form select { min-width: 0; height: 32px; padding: 0 9px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-color); color: var(--text-color); font: inherit; }
 .provider-secret-row { display: grid; grid-template-columns: 112px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
@@ -31,6 +40,6 @@
 .provider-check { grid-template-columns: 18px minmax(0, 1fr) !important; align-items: start !important; }
 .provider-check input { width: 14px; height: 14px; }
 .provider-status { min-height: 20px; color: var(--text-secondary); font-size: 12px; }
-.provider-form-actions { margin-top: auto; display: flex; justify-content: flex-end; gap: 8px; }
+.provider-form-actions { flex: 0 0 auto; padding: 12px 20px; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; border-top: 1px solid var(--border-color); }
 .provider-form-actions .primary { background: var(--link-color); border-color: var(--link-color); color: var(--bg-color); }
-@media (max-width: 640px) { .provider-settings-body { grid-template-columns: 1fr; } .provider-settings-list { max-height: 120px; border-right: 0; border-bottom: 1px solid var(--border-color); } }
+@media (max-width: 640px) { .provider-settings-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); } .provider-settings-list { max-height: 120px; border-right: 0; border-bottom: 1px solid var(--border-color); } .provider-settings-form > label { grid-template-columns: 72px minmax(0, 1fr); } .provider-model-status { padding-left: 84px; } }

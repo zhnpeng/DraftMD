@@ -77,7 +77,7 @@ test('persists workspace conversations and model choices across restart', async 
       const restartedPage = await restarted.windowMatching(async (candidate) => await candidate.locator('#file-title').textContent().catch(() => '') === 'notes.md')
       await expect(restartedPage.locator('#agent-session-button')).toHaveText('Renamed conversation')
       await expect(restartedPage.locator('#agent-model-button')).toContainText('Secondary')
-      await restartedPage.keyboard.press('Meta+J')
+      await restartedPage.locator('#agent-input').focus()
       await expect(restartedPage.locator('#agent-dock-expanded')).toBeVisible()
       await restartedPage.locator('#agent-session-button').click()
       await expect(restartedPage.locator('#agent-session-menu')).toBeVisible()
@@ -89,7 +89,7 @@ test('persists workspace conversations and model choices across restart', async 
     try {
       const otherPage = await otherWorkspace.windowMatching(async (candidate) => await candidate.locator('#file-title').textContent().catch(() => '') === 'notes.md')
       await expect(otherPage.locator('#agent-session-button')).toHaveText('New conversation')
-      await otherPage.keyboard.press('Meta+J')
+      await otherPage.locator('#agent-input').focus()
       await expect(otherPage.locator('#agent-dock-expanded')).toBeVisible()
       await otherPage.locator('#agent-session-button').click()
       await expect(otherPage.locator('#agent-session-menu')).toBeVisible()

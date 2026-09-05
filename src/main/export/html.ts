@@ -24,9 +24,9 @@ export function buildHTMLDocument(snapshot: HtmlExportSnapshot, input: { title: 
   <title>${title}</title>
   <style>${snapshot.styles || ''}
     html, body { height: auto; overflow: visible; }
-    body { min-width: 320px; }
+    body { min-width: 320px; padding: 0 !important; }
     #titlebar, #file-panel, #source-editor { display: none !important; }
-    #editor { height: auto !important; min-height: 100vh; overflow: visible !important; padding: 40px !important; }
+    #editor { width: 100% !important; margin-left: 0 !important; height: auto !important; min-height: 100vh; overflow: visible !important; padding: 40px !important; }
   </style>
 </head>
 <body class="${bodyClass}">

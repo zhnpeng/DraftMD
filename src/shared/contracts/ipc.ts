@@ -4,7 +4,7 @@ import { AgentStartInputSchema, AgentStartResultSchema, ApprovalDecisionSchema, 
 import { WorkspaceDescriptorSchema } from './workspace'
 import { ChangeSetSchema, UndoResultSchema } from './changes'
 import { DiagnosticsBundleSchema } from './diagnostics'
-import { CapabilityTestResultSchema, ProviderConfigDTOSchema, ProviderConfigInputSchema, ProviderSecretsInputSchema } from './provider'
+import { CapabilityTestResultSchema, ProviderConfigDTOSchema, ProviderConfigInputSchema, ProviderSecretsInputSchema, ProviderModelListInputSchema, ProviderModelListResultSchema } from './provider'
 import { ModelSwitchSchema, SessionCreateSchema, SessionDTOSchema, SessionRenameSchema, UUIDv7Schema } from './session'
 import {
   type DocumentSnapshot,
@@ -99,6 +99,10 @@ export const IpcInvokeSchemas = {
   'provider-test': {
     args: z.tuple([UUIDv7Schema]),
     result: CapabilityTestResultSchema,
+  },
+  'provider-models': {
+    args: z.tuple([ProviderModelListInputSchema, ProviderSecretsInputSchema]),
+    result: ProviderModelListResultSchema,
   },
   'provider-set-default': {
     args: z.tuple([UUIDv7Schema]),
@@ -271,6 +275,7 @@ export interface DraftMDAPI {
   listProviderConfigs(...args: IpcInvokeMap['provider-list']['args']): Promise<IpcInvokeMap['provider-list']['result']>
   saveProviderConfig(...args: IpcInvokeMap['provider-save']['args']): Promise<IpcInvokeMap['provider-save']['result']>
   testProviderConfig(...args: IpcInvokeMap['provider-test']['args']): Promise<IpcInvokeMap['provider-test']['result']>
+  listProviderModels(...args: IpcInvokeMap['provider-models']['args']): Promise<IpcInvokeMap['provider-models']['result']>
   setDefaultProvider(...args: IpcInvokeMap['provider-set-default']['args']): Promise<IpcInvokeMap['provider-set-default']['result']>
   deleteProviderConfig(...args: IpcInvokeMap['provider-delete']['args']): Promise<IpcInvokeMap['provider-delete']['result']>
   currentDocumentVersion(...args: IpcInvokeMap['current-document-version']['args']): Promise<IpcInvokeMap['current-document-version']['result']>

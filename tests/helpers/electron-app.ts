@@ -140,6 +140,7 @@ export async function launchDraftMD(options: LaunchDraftMDOptions = {}): Promise
       }
       if (options.onboardingCompleted !== false) {
         const dialog = page.locator('#onboarding-dialog')
+        await dialog.waitFor({ state: 'attached' })
         if (await dialog.isVisible().catch(() => false)) {
           await dialog.getByRole('button', { name: /Skip guide|跳过指南/ }).click()
         }

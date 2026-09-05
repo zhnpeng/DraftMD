@@ -1,4 +1,4 @@
-import OpenAI from 'openai'
+import * as OpenAI from 'openai'
 import { describe, expect, it, vi } from 'vitest'
 import type { ProviderRequest } from '../../../src/shared/contracts/provider'
 import {
@@ -7,6 +7,9 @@ import {
   type OpenAIClientBoundary,
 } from '../../../src/main/providers/openai/openai-adapter'
 import { createOpenAICompatibleAdapter } from '../../../src/main/providers/openai-compatible/openai-compatible-adapter'
+import { toolDefinitions } from '../../../src/main/agent/tools/definitions'
+import { parseToolCall } from '../../../src/main/agent/tools/schemas'
+import { toOpenAITools } from '../../../src/main/providers/openai/openai-messages'
 
 const request: ProviderRequest = {
   system: 'Markdown only.',
@@ -35,6 +38,43 @@ async function collect(adapter: OpenAIAdapter, signal = new AbortController().si
 }
 
 describe('OpenAIAdapter', () => {
+  it('encodes every actual workspace tool as a strict schema without changing local optional arguments', () => {
+    const original = structuredClone(toolDefinitions)
+    const tools = toOpenAITools(toolDefinitions)
+    for (const tool of tools) {
+      expect(tool.type).toBe('function')
+      if (tool.type !== 'function') continue
+      expect(tool.function.strict).toBe(true)
+      const schema = tool.function.parameters!
+      expect(schema.additionalProperties).toBe(false)
+      expect(new Set(schema.required as string[])).toEqual(new Set(Object.keys(schema.properties as object)))
+    }
+    expect(tools.find(tool => tool.type === 'function' && tool.function.name === 'search_markdown')).toMatchObject({
+      function: { parameters: { properties: { limit: { anyOf: [{ type: 'integer', minimum: 1, maximum: 50 }, { type: 'null' }] } } } },
+    })
+    expect(toolDefinitions).toEqual(original)
+  })
+
+  it.each([
+    ['search_markdown', { query: 'draft', limit: null }, { query: 'draft' }],
+    ['read_markdown', { path: 'draft.md', heading: null, startLine: null, endLine: null }, { path: 'draft.md' }],
+    ['read_markdown', { path: 'draft.md', heading: null, startLine: 2, endLine: 5 }, { path: 'draft.md', startLine: 2, endLine: 5 }],
+  ])('restores omitted optional %s arguments while retaining the original provider transcript', async (name, wireInput, localInput) => {
+    const argumentsText = JSON.stringify(wireInput)
+    const adapter = new OpenAIAdapter({ chat: { completions: { create: vi.fn().mockResolvedValue(chunks([
+      chunk({ choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: 'call-nullable', type: 'function', function: { name, arguments: argumentsText } }] }, finish_reason: 'tool_calls' }] }),
+    ])) } } }, {
+      kind: 'openai-compatible', model: 'mock-model', baseUrl: 'http://127.0.0.1/v1', timeoutMs: 5000, toolsEnabled: true,
+    }, OpenAI)
+    const events = []
+    for await (const event of adapter.stream({ ...request, tools: toolDefinitions }, new AbortController().signal)) events.push(event)
+    const call = events.find(event => event.type === 'tool-call')
+    expect(call).toMatchObject({ call: { name, input: localInput } })
+    if (call?.type !== 'tool-call') throw new Error('Missing tool call')
+    expect(parseToolCall(call.call).input).toEqual(localInput)
+    expect(events.at(-1)).toMatchObject({ assistantMessage: { providerData: { toolCalls: [{ function: { arguments: argumentsText } }] } } })
+  })
+
   it('normalizes text, usage, stop reason, and the completed assistant message', async () => {
     const client: OpenAIClientBoundary = { chat: { completions: { create: vi.fn().mockResolvedValue(chunks([
       chunk({ choices: [{ index: 0, delta: { content: 'Hello' }, finish_reason: null }] }),
@@ -58,6 +98,23 @@ describe('OpenAIAdapter', () => {
       stream: true, stream_options: { include_usage: true }, model: 'gpt-test', max_completion_tokens: 8_000,
       tools: [expect.objectContaining({ type: 'function', function: expect.objectContaining({ strict: true }) })],
     }), { signal: expect.any(AbortSignal) })
+  })
+
+  it.each([{ query: null, limit: null }, { query: 'draft', limit: null, unknown: null }])('preserves invalid required or unknown null arguments for local rejection: %j', async wireInput => {
+    const adapter = new OpenAIAdapter({ chat: { completions: { create: vi.fn().mockResolvedValue(chunks([
+      chunk({ choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: 'call-invalid', type: 'function', function: { name: 'search_markdown', arguments: JSON.stringify(wireInput) } }] }, finish_reason: 'tool_calls' }] }),
+    ])) } } }, {
+      kind: 'openai-compatible', model: 'mock-model', baseUrl: 'http://127.0.0.1/v1', timeoutMs: 5000, toolsEnabled: true,
+    }, OpenAI)
+    for await (const event of adapter.stream({ ...request, tools: toolDefinitions }, new AbortController().signal)) {
+      if (event.type === 'tool-call') {
+        expect(() => parseToolCall(event.call)).toThrowError(expect.objectContaining({ code: 'INVALID_TOOL_CALL' }))
+        expect(Object.hasOwn(event.call.input as object, 'unknown')).toBe(Object.hasOwn(wireInput, 'unknown'))
+        expect((event.call.input as { query: unknown }).query).toBe(wireInput.query)
+        return
+      }
+    }
+    throw new Error('Missing tool call')
   })
 
   it('buffers interleaved parallel tool argument deltas and parses each exactly once', async () => {
@@ -100,7 +157,7 @@ describe('OpenAIAdapter', () => {
     ['content_filter', 'content-filter'], ['function_call', 'unknown'],
   ])('normalizes finish reason %s', async (source, expected) => {
     const adapter = new OpenAIAdapter({ chat: { completions: { create: vi.fn().mockResolvedValue(chunks([
-      chunk({ choices: [{ index: 0, delta: {}, finish_reason: source }] }),
+      chunk({ choices: [{ index: 0, delta: { content: 'Reply' }, finish_reason: source }] }),
     ])) } } }, {
       kind: 'openai', model: 'gpt-test', baseUrl: 'https://api.openai.com/v1', timeoutMs: 60_000, toolsEnabled: true,
     }, OpenAI)
@@ -161,7 +218,7 @@ describe('OpenAIAdapter', () => {
 
   it('creates native and compatible SDK clients lazily with materialized connection options', async () => {
     const constructor = vi.fn(function () { return { chat: { completions: { create: vi.fn() } } } })
-    const importer = vi.fn().mockResolvedValue({ default: constructor, ...OpenAI })
+    const importer = vi.fn().mockResolvedValue({ ...OpenAI, default: constructor })
 
     await createOpenAIAdapter({ apiKey: 'key', model: 'gpt-test', timeoutMs: 9_000 }, importer)
     await createOpenAICompatibleAdapter({ apiKey: null, model: 'local', baseUrl: 'http://127.0.0.1:11434/v1', timeoutMs: 8_000, headers: { token: 'secret' }, toolsEnabled: false }, importer)

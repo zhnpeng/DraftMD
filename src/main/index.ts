@@ -10,6 +10,7 @@ import { createWatchService } from './documents/watch-service'
 import { createWindowManager, type WindowManager } from './app/window-manager'
 import { buildApplicationMenu } from './app/menu'
 import { createSystemFontLoader, registerIpcHandlers } from './app/ipc'
+import { createProviderModelCatalog } from './providers/model-catalog'
 import { createBundledDocuments } from './app/bundled-documents'
 import { setAsDefaultApp } from './app/default-app-service'
 import { createUpdateService } from './app/update-service'
@@ -326,6 +327,7 @@ registerIpcHandlers({
     undoInterrupted: (id) => recovery.undoInterruptedTask(id),
   }, writeFile, rebuildMenu,
   testProvider: capabilityTester.testProvider,
+  listProviderModels: createProviderModelCatalog(providerConfigService).listModels,
   reportTheme: (theme) => { if (theme !== currentTheme) { currentTheme = theme; menuControls?.updateThemeChecks(theme) } },
   loadSystemFonts, downloadUpdate: updateService.download, installUpdate: updateService.install,
 })

@@ -39,6 +39,7 @@ describe('loopback OpenAI-compatible capability probe', () => {
 
   it.each([
     ['chat-only', 'chat-only', null],
+    ['html-response', 'unavailable', 'EMPTY_RESPONSE'],
     ['malformed-tool', 'chat-only', null],
     ['auth-error', 'unavailable', 'AUTHENTICATION'],
     ['rate-limit', 'unavailable', 'RATE_LIMIT'],

@@ -1,6 +1,6 @@
 import type { DraftMDAPI, TaskEvent } from '../../shared/contracts'
 import type { SelectionReference } from '../../shared/contracts/agent'
-import { msg } from '../../shared/i18n'
+import { messages, msg, type MessageKey } from '../../shared/i18n'
 import type { DocumentControllerActions } from '../app/document-controller'
 import { createAgentDockController, createPendingStop } from './agent-dock-controller'
 import { createSessionController } from './session-controller'
@@ -30,6 +30,7 @@ export function createAgentDockApp(input: {
   captureSelection(): Promise<SelectionReference | null>
 }) {
   const messageLog = required('agent-message-log')
+  const taskContent = required('agent-task-content')
   const activities = required('agent-activity-list')
   const statusElement = required('agent-task-status')
   const approvalPanel = required('agent-approval-panel')
@@ -58,9 +59,10 @@ export function createAgentDockApp(input: {
   const dock = createAgentDockController({
     root: required('agent-dock'), expanded: required('agent-dock-expanded'), resize: required('agent-dock-resize'),
     textarea: required('agent-input'), collapseButton: required('agent-collapse-button'),
+    expandButton: required('agent-expand-button'),
     sendButton: required('agent-send-button'), stopButton: required('agent-stop-button'),
     storage: input.storage,
-    onSend: (text) => { void send(text) },
+    onSend: (text) => send(text),
     onStop: () => { const taskId = pendingStop.request(activeTaskId); if (taskId) void input.api.stopAgentTask(taskId) },
   })
 
@@ -69,11 +71,11 @@ export function createAgentDockApp(input: {
     cancelFrame: id => cancelAnimationFrame(id),
     render: (text) => {
       if (!taskState) return
-      const nearBottom = shouldAutoScroll(messageLog)
+      const nearBottom = shouldAutoScroll(taskContent)
       let assistant = messageLog.querySelector<HTMLElement>('.agent-message.assistant[data-streaming]')
       if (!assistant) { assistant = renderMessage(messageLog, 'assistant', ''); assistant.dataset.streaming = 'true' }
       assistant.textContent = `${assistant.textContent ?? ''}${text}`
-      if (nearBottom) messageLog.scrollTop = messageLog.scrollHeight
+      if (nearBottom) taskContent.scrollTop = taskContent.scrollHeight
     },
   })
   const undoTask = async (taskId: string): Promise<void> => {
@@ -84,7 +86,12 @@ export function createAgentDockApp(input: {
       statusElement.textContent = msg('dock.status.undo-conflict')
       renderUndoConflicts({
         container: recoveryPanel, files: result.files,
-        onOpen: (path) => { void input.api.openWorkspaceFile(path) },
+        onOpen: (path) => {
+          void (async () => {
+            if (input.document.isDirty() && !await input.document.flushSave()) return
+            if (!await input.api.openWorkspaceFile(path)) statusElement.textContent = msg('dock.openFileFailed')
+          })().catch(() => { statusElement.textContent = msg('dock.openFileFailed') })
+        },
         onDismiss: () => { recoveryPanel.hidden = true },
       })
       dock.open()
@@ -167,12 +174,33 @@ export function createAgentDockApp(input: {
       onRemove: () => { setSelection(null); dock.focusInput() },
     })
   }
-  const send = async (text: string): Promise<void> => {
-    if (starting || activeTaskId) return
+  const showSendFeedback = (message: string, configureModel = false): void => {
+    messageLog.querySelector('.agent-send-feedback')?.remove()
+    const feedback = document.createElement('div')
+    feedback.className = 'agent-send-feedback'
+    feedback.setAttribute('role', 'alert')
+    const description = document.createElement('p')
+    description.textContent = message
+    feedback.append(description)
+    if (configureModel) {
+      const configure = document.createElement('button')
+      configure.type = 'button'
+      configure.textContent = msg('dock.configureModel')
+      configure.addEventListener('click', () => input.onConfigureModel())
+      feedback.append(configure)
+    }
+    messageLog.append(feedback)
+    dock.open()
+    taskContent.scrollTop = taskContent.scrollHeight
+  }
+  const send = async (text: string): Promise<boolean> => {
+    if (starting || activeTaskId) return false
+    let accepted = false
     starting = true
     startingEvents = []
     pendingStop.clear()
     closeMenus()
+    messageLog.querySelector('.agent-send-feedback')?.remove()
     dock.setBusy(true)
     sessionButton.disabled = true
     modelButton.disabled = true
@@ -181,9 +209,17 @@ export function createAgentDockApp(input: {
       await sessions.refreshProviders()
       const state = sessions.state()
       refreshHeader()
-      if (!workspaceId) { statusElement.textContent = msg('dock.openWorkspace'); dock.open(); return }
-      if (!state.providerId) { statusElement.textContent = msg('dock.configureModel'); dock.open(); return }
-      if (input.document.isDirty() && !await input.document.flushSave()) return
+      if (!state.providerId) {
+        statusElement.textContent = msg('dock.configureModel')
+        showSendFeedback(msg('dock.modelRequired'), true)
+        return false
+      }
+      if (!workspaceId) {
+        statusElement.textContent = msg('dock.openWorkspace')
+        showSendFeedback(msg('dock.openWorkspace'))
+        return false
+      }
+      if (input.document.isDirty() && !await input.document.flushSave()) return false
       ++historyGeneration
       historyEvents = null
       deltaBatcher.flush()
@@ -192,12 +228,13 @@ export function createAgentDockApp(input: {
       renderCurrentApproval()
       activities.replaceChildren()
       changeSummary.replaceChildren(); changeSummary.hidden = true
-      renderMessage(messageLog, 'user', text)
       dock.setBusy(true); dock.open(); statusElement.textContent = msg('dock.preparing')
       const result = await input.api.startAgentTask({
         workspaceId, sessionId: state.currentSessionId ?? undefined, providerConfigId: state.providerId,
         prompt: text, currentPath: input.document.currentPath(), currentContent: input.document.currentContent(), selection,
       })
+      accepted = true
+      renderMessage(messageLog, 'user', text)
       taskMode = result.mode
       if (result.taskId) {
         activeTaskId = result.taskId
@@ -218,6 +255,7 @@ export function createAgentDockApp(input: {
       const key = selectionErrorMessageKey(error)
       if (key) setSelection(null)
       statusElement.textContent = msg(key ?? 'dock.startFailed')
+      showSendFeedback(msg(key ?? 'dock.startFailed'))
       pendingStop.clear()
     } finally {
       starting = false
@@ -226,6 +264,7 @@ export function createAgentDockApp(input: {
       modelButton.disabled = activeTaskId !== null
       dock.setBusy(activeTaskId !== null)
     }
+    return accepted
   }
   const renderCurrentApproval = (): void => {
     const event = approvalQueue.current()
@@ -258,6 +297,12 @@ export function createAgentDockApp(input: {
     taskState = reduceTaskEvent(taskState, event)
     if (taskState === previous) return
     if (event.type === 'assistant-text-delta') deltaBatcher.push(event.text)
+    else if (event.type === 'error' && event.code !== 'CANCELLED') {
+      deltaBatcher.flush()
+      const key = `provider.error.${event.code}`
+      showSendFeedback(msg(Object.hasOwn(messages.en, key) ? key as MessageKey : 'provider.error.PROVIDER_ERROR'),
+        ['EMPTY_RESPONSE', 'AUTHENTICATION', 'MODEL_NOT_FOUND', 'API_UNSUPPORTED'].includes(event.code))
+    }
     else if (event.type === 'tool-start' || event.type === 'tool-result') renderActivity(activities, event)
     else if (event.type === 'approval-request') {
       approvalQueue.add(event)

@@ -79,8 +79,12 @@ export class ChatRuntime {
           providerData = event.assistantMessage.providerData
         }
       }
+      if (!(finalText || text).trim()) {
+        const code = stopReason === 'refusal' || stopReason === 'content-filter' ? 'REFUSAL' : 'EMPTY_RESPONSE'
+        throw Object.assign(new Error(code), { code })
+      }
     } finally {
-      if (finalText || text) {
+      if ((finalText || text).trim()) {
         this.deps.messages.create({
           id: uuidv7(now()), sessionId: input.sessionId, role: 'assistant',
           content: [{ type: 'text', text: finalText || text }], modelSwitch: providerData,

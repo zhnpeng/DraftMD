@@ -146,3 +146,52 @@ test('closing a chat task window aborts its provider request', async () => {
     await expect.poll(server.cancelled).toBe(1)
   } finally { await app.cleanup(); await server.close() }
 })
+
+for (const failure of ['html', 'empty', 'authentication'] as const) {
+  test(`shows a useful chat error for ${failure} responses and permits retry`, async ({}, testInfo) => {
+    let requests = 0
+    const server = createServer(async (request, response) => {
+      for await (const _ of request) { /* consume the request before replying */ }
+      requests++
+      if (requests === 2 && failure === 'html') {
+        response.writeHead(200, { 'content-type': 'text/html' })
+        response.end('<html>private-dashboard-marker</html>')
+      } else if (requests === 2 && failure === 'authentication') {
+        response.writeHead(401, { 'content-type': 'application/json' })
+        response.end(JSON.stringify({ error: { message: 'private-dashboard-marker' } }))
+      } else {
+        response.writeHead(200, { 'content-type': 'text/event-stream' })
+        const content = requests === 2 ? '' : requests === 1 ? 'Text-only provider' : 'Recovered reply'
+        response.write(`data: ${JSON.stringify({ id: 'chat-error-test', object: 'chat.completion.chunk', created: 1, model: 'chat-model', choices: [{ index: 0, delta: { content }, finish_reason: 'stop' }] })}\n\n`)
+        response.end('data: [DONE]\n\n')
+      }
+    }).listen(0, '127.0.0.1')
+    await once(server, 'listening')
+    const app = await launchDraftMD({ locale: 'en', documentName: 'task.md', prepare: dir => writeFile(join(dir, 'task.md'), '# Task\n') })
+    try {
+      const page = await app.windowMatching(async p => await p.locator('#file-title').textContent().catch(() => '') === 'task.md')
+      await configureChatOnlyProvider(page, `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`, 'Chat error test')
+      await page.locator('#agent-input').fill('ping')
+      await page.locator('#agent-input').press('Enter')
+      const feedback = page.locator('.agent-send-feedback')
+      await expect(feedback).toContainText(failure === 'authentication' ? 'Authentication failed' : 'The service returned no reply')
+      await expect(page.locator('#agent-task-status')).toHaveText('Failed')
+      await expect(page.locator('#agent-message-log .user')).toHaveText('ping')
+      await expect(page.locator('#agent-message-log')).not.toContainText('private-dashboard-marker')
+      await expect(page.locator('#agent-send-button')).toBeEnabled()
+      const win = await app.browserWindow(page)
+      await win.evaluate(w => w.setContentSize(800, 600))
+      await expect(feedback).toBeInViewport()
+      await page.screenshot({ path: testInfo.outputPath(`chat-error-${failure}.png`) })
+      await page.locator('#agent-input').fill('retry')
+      await page.locator('#agent-input').press('Enter')
+      await expect(page.locator('#agent-message-log .assistant')).toHaveText('Recovered reply')
+      await expect(feedback).toHaveCount(0)
+      await expect(page.locator('#agent-task-status')).toHaveText('Suggestion only')
+      expect(requests).toBe(3)
+    } finally {
+      await app.cleanup(); server.closeAllConnections()
+      await new Promise<void>(resolve => server.close(() => resolve()))
+    }
+  })
+}

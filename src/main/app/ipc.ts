@@ -7,7 +7,7 @@ import type { WindowManager } from './window-manager'
 import type { WorkspaceManager } from '../workspace/workspace-manager'
 import type { DiagnosticsBundle } from '../../shared/contracts/diagnostics'
 import type { InterruptedTaskSummaryDTO } from '../../shared/contracts/agent'
-import type { CapabilityTestResult, ProviderConfigDTO, ProviderConfigInput, ProviderSecretsInput } from '../../shared/contracts/provider'
+import type { CapabilityTestResult, ProviderConfigDTO, ProviderConfigInput, ProviderSecretsInput, ProviderModelListInput, ProviderModelListResult } from '../../shared/contracts/provider'
 import { exportPDF } from '../export/pdf'
 import { exportHTML, type HtmlExportSnapshot } from '../export/html'
 import { IpcEventSchemas, IpcInvokeSchemas, IpcSendSchemas, type IpcInvokeMap, type IpcSendMap } from '../../shared/contracts'
@@ -23,6 +23,7 @@ export interface IpcRegistrationDeps {
     deleteConfig(id: string, deleteSecrets: boolean): Promise<boolean>
   }
   testProvider(id: string, signal: AbortSignal): Promise<CapabilityTestResult>
+  listProviderModels(input: ProviderModelListInput, secrets: ProviderSecretsInput): Promise<ProviderModelListResult>
   agentSessionService: {
     sessionHistory(win: BrowserWindow, sessionId: string): unknown
     listSessions(win: BrowserWindow, workspaceId: string): unknown[]
@@ -201,6 +202,7 @@ export function registerIpcHandlers(deps: IpcRegistrationDeps): void {
     return saved
   })
   invokeHandler('provider-test', async (_event, id) => deps.testProvider(id, new AbortController().signal))
+  invokeHandler('provider-models', (_event, config, secrets) => deps.listProviderModels(config, secrets))
   invokeHandler('provider-set-default', (_event, id) => {
     deps.providerConfigService.setDefault(id)
     deps.rebuildMenu()
@@ -229,8 +231,7 @@ export function registerIpcHandlers(deps: IpcRegistrationDeps): void {
     const win = winFromEvent(event)
     if (!win) return false
     const filePath = await deps.workspaceManager.resolveFile(win.id, relativePath)
-    await deps.windowManager.openFile(filePath, win)
-    return true
+    return (await deps.windowManager.loadFileInWindow(win, filePath)) !== null
   })
   invokeHandler('open-file', async (event) => {
     const win = winFromEvent(event)

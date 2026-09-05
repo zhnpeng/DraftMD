@@ -29,7 +29,47 @@ async function setup(overrides: Record<string, unknown> = {}) {
 }
 
 describe('ProviderConfigService', () => {
+  it('retains the legacy native protocol while new native configs default to Responses', async () => {
+    const { database, repository, service } = await setup()
+    try {
+      const saved = await service.saveConfig({ ...input, kind: 'openai', preset: 'none', baseUrl: 'https://api.openai.com/v1' })
+      expect(saved.apiMode).toBe('responses')
+      database.prepare("update provider_configs set settings_json = '{}' where id = ?").run(saved.id)
+      expect(repository.get(saved.id)?.apiMode).toBe('chat-completions')
+    } finally { database.close() }
+  })
+  it('persists protocol selection without replacing secrets and rejects stale protocol tests', async () => {
+    const { database, repository, service } = await setup()
+    try {
+      const saved = await service.saveConfig(input, { apiKey: 'retained-key' })
+      const original = repository.get(saved.id)!
+      database.prepare("update provider_configs set settings_json = json_set(settings_json, '$.unrelated', 42) where id = ?").run(saved.id)
+      const changed = await service.saveConfig({ ...input, id: saved.id, apiMode: 'responses' })
+      expect(changed.apiMode).toBe('responses')
+      const reopened = createProviderConfigRepository(database).get(saved.id)!
+      expect(reopened.apiMode).toBe('responses')
+      expect(reopened.credentialRef).toBe(original.credentialRef)
+      expect((await service.materialize(saved.id)).apiKey).toBe('retained-key')
+      expect(JSON.parse((database.prepare('select settings_json from provider_configs where id = ?').get(saved.id) as { settings_json: string }).settings_json).unrelated).toBe(42)
+      expect(repository.updateTestResult(saved.id, { capability: 'agent', testedAt: '2026-09-05T10:00:00Z', testedModel: input.model, latencyMs: 42, errorCode: null }, original)).toBe(false)
+      await service.saveConfig({ ...input, id: saved.id, name: 'Renamed' })
+      expect(repository.get(saved.id)?.apiMode).toBe('responses')
+    } finally { database.close() }
+  })
+  it('requires explicit secret replacement or removal when changing credential destinations', async () => {
+    const { database, repository, service } = await setup()
+    try {
+      const saved = await service.saveConfig(input, { apiKey: 'old-key', headers: { 'x-secret': 'old-header' } })
+      const changed = { ...input, id: saved.id, baseUrl: 'http://127.0.0.1:1234/v1' }
+      await expect(service.saveConfig(changed, {})).rejects.toMatchObject({ code: 'CREDENTIALS_REENTRY_REQUIRED' })
+      await expect(service.saveConfig(changed, { apiKey: 'new-key' })).rejects.toMatchObject({ code: 'CREDENTIALS_REENTRY_REQUIRED' })
+      expect(repository.get(saved.id)?.baseUrl).toBe(input.baseUrl)
+      await service.saveConfig(changed, { apiKey: 'new-key', removeHeaders: ['x-secret'] })
+      expect(await service.materialize(saved.id)).toMatchObject({ apiKey: 'new-key', headers: {} })
+    } finally { database.close() }
+  })
   it.each([
+    { apiMode: 'responses' as const },
     { model: 'another-model' }, { baseUrl: 'http://127.0.0.1:1234/v1' },
     { kind: 'openai' as const }, { preset: 'lm-studio' as const },
     { timeoutMs: 30_000 }, { streamEnabled: false }, { toolsEnabled: false },

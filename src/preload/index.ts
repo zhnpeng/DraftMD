@@ -160,6 +160,7 @@ export const draftmd: DraftMDAPI = {
   listProviderConfigs: () => invoke('provider-list'),
   saveProviderConfig: (config, secrets) => invoke('provider-save', config, secrets),
   testProviderConfig: (id) => invoke('provider-test', id),
+  listProviderModels: (config, secrets) => invoke('provider-models', config, secrets),
   setDefaultProvider: (id) => invoke('provider-set-default', id),
   deleteProviderConfig: (id, deleteSecrets) => invoke('provider-delete', id, deleteSecrets),
   currentDocumentVersion: () => invoke('current-document-version'),

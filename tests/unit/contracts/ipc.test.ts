@@ -153,7 +153,7 @@ describe('serializable shared IPC schemas', () => {
       'agent-keep-interrupted', 'agent-list-interrupted', 'agent-respond-approval', 'agent-start', 'agent-task-changes', 'agent-task-undo', 'agent-stop', 'agent-undo-interrupted',
       'current-document-version', 'diagnostics-export', 'diagnostics-preview', 'download-update', 'export-html', 'export-pdf', 'install-update', 'list-siblings', 'list-system-fonts',
       'list-workspace-files', 'open-file', 'open-file-path', 'open-sibling', 'open-workspace', 'open-workspace-file',
-      'provider-delete', 'provider-list', 'provider-save', 'provider-set-default', 'provider-test',
+      'provider-delete', 'provider-list', 'provider-models', 'provider-save', 'provider-set-default', 'provider-test',
       'report-external-conflict', 'report-theme', 'save-file',
       'save-file-as', 'save-stream-begin', 'save-stream-chunk', 'save-stream-commit', 'session-create', 'session-history', 'session-delete', 'session-list', 'session-rename', 'session-switch-model', 'set-app-locale', 'set-editor-font',
     ].sort())

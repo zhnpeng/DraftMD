@@ -20,6 +20,8 @@ describe('PDF export document isolation', () => {
     }
     expect(printCss).toMatch(/#editor\s*\{[^}]*margin-left:\s*0\s*!important/)
     expect(printCss).toMatch(/#editor\s*\{[^}]*padding:\s*20mm\s*!important/)
+    expect(printCss).toMatch(/body\s*\{[^}]*padding:\s*0\s*!important/)
+    expect(printCss).toMatch(/#editor\s*\{[^}]*width:\s*100%\s*!important/)
     expect(win.webContents.printToPDF).toHaveBeenCalledOnce()
   })
 })

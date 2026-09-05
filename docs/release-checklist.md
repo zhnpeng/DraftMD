@@ -1,5 +1,13 @@
 # DraftMD Release Checklist
 
+## Publication Hold - 2026-09-05
+
+The owner withdrew public releases pending successful personal use. Both `v0.1.0` and `v0.1.0-preview.5` were converted to drafts, and the GitHub `Release` workflow was disabled. The unauthenticated GitHub Releases API reports zero public releases. Source, tags, draft assets, and local installations are retained.
+
+Do not publish or republish a release, or re-enable the publishing workflow, until the owner explicitly confirms the app works for their use and requests the first public release. Automated test results alone do not authorize publication. Local development, testing, and local installation may continue under the existing authorization. Build and verify a fresh candidate for the eventual first release.
+
+## Historical Reports
+
 The report below records the 2026-09-02 candidate and its original release policy. For the current source tree and remaining validation, see the [current roadmap](roadmap.md). The [0.1.0 release](releases/v0.1.0.md) uses the subsequently authorized unsigned GitHub distribution policy. Historical artifact hashes and validation claims here do not describe that release.
 
 Use this checklist for a release candidate. Do not publish, tag, sign, notarize, or run paid-provider checks without the required authorization.

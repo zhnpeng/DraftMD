@@ -86,26 +86,32 @@
     </button>
   </div>
   <section id="agent-dock" aria-label="AI task dock" data-i18n-aria-label="dock.label">
-    <div id="agent-dock-resize" role="separator" aria-orientation="horizontal" aria-label="Resize AI task dock" data-i18n-aria-label="dock.resize" tabindex="0" hidden></div>
+    <button id="agent-expand-button" type="button" aria-controls="agent-dock-expanded" aria-expanded="false" data-i18n-aria-label="dock.expand" aria-label="Expand AI sidebar">
+      <svg viewBox="0 0 16 16"><path d="M3 2.5h10v11H3zM9 3v10M6.5 6l-2 2 2 2"/></svg>
+      <span class="toolbar-tip" data-i18n="dock.expand">Expand AI sidebar</span>
+    </button>
+    <div id="agent-dock-resize" role="separator" aria-orientation="vertical" aria-label="Resize AI task dock" data-i18n-aria-label="dock.resize" aria-controls="agent-dock" tabindex="0" hidden></div>
     <div id="agent-dock-expanded" hidden>
       <header class="agent-dock-header">
         <div class="agent-menu-anchor"><button id="agent-session-button" type="button" data-i18n="dock.newSession" aria-haspopup="menu" aria-expanded="false">New conversation</button><div id="agent-session-menu" class="agent-menu agent-session-menu" role="menu" hidden></div></div>
         <span id="agent-task-status" aria-live="polite" data-i18n="dock.ready">Ready</span>
         <button id="agent-stop-button" type="button" data-i18n="agent.stop" hidden>Stop task</button>
         <button id="agent-collapse-button" type="button" data-i18n-aria-label="dock.collapse" aria-label="Collapse AI task dock">
-          <svg viewBox="0 0 16 16"><path d="m4 6 4 4 4-4"/></svg>
+          <svg viewBox="0 0 16 16"><path d="m6 4 4 4-4 4"/></svg>
         </button>
       </header>
-      <div id="agent-message-log" role="log" aria-live="polite" aria-relevant="additions text"></div>
-      <div id="agent-activity-list" aria-label="Task activity" data-i18n-aria-label="dock.activity"></div>
+      <div id="agent-task-content">
+        <div id="agent-message-log" role="log" aria-live="polite" aria-relevant="additions text"></div>
+        <div id="agent-activity-list" aria-label="Task activity" data-i18n-aria-label="dock.activity"></div>
+        <div id="agent-change-summary" hidden></div>
+        <div id="agent-recovery-panel" hidden></div>
+      </div>
       <div id="agent-approval-panel" hidden></div>
-      <div id="agent-change-summary" hidden></div>
-      <div id="agent-recovery-panel" hidden></div>
     </div>
     <div class="agent-input-row">
       <div class="agent-menu-anchor"><button id="agent-model-button" type="button" data-i18n="dock.configureModel" aria-haspopup="menu" aria-expanded="false">Configure model</button><div id="agent-model-menu" class="agent-menu agent-model-menu" role="menu" hidden></div></div>
       <div id="agent-selection-chip" hidden></div>
-      <textarea id="agent-input" rows="1" data-i18n-placeholder="dock.placeholder" placeholder="Ask DraftMD…"></textarea>
+      <textarea id="agent-input" rows="3" data-i18n-placeholder="dock.placeholder" placeholder="Ask DraftMD…"></textarea>
       <button id="agent-send-button" type="button" data-i18n-aria-label="dock.send" aria-label="Send task">
         <svg viewBox="0 0 16 16"><path d="M2.5 8 13 2.5 10 13 7.5 8.5z"/></svg>
       </button>
@@ -129,7 +135,8 @@
     </div>
     <div class="provider-settings-body">
       <nav class="provider-settings-list" data-provider-list aria-label="Provider configurations"></nav>
-      <form class="provider-settings-form">
+      <div class="provider-settings-editor">
+      <form id="provider-settings-form" class="provider-settings-form">
         <input name="id" type="hidden">
         <label><span data-i18n="provider.name">Name</span><input name="name" required maxlength="256"></label>
         <label><span data-i18n="provider.kind">Provider</span><select name="kind">
@@ -138,8 +145,13 @@
         <label><span data-i18n="provider.preset">Preset</span><select name="preset">
           <option value="none" data-i18n="provider.preset.none">None</option><option value="ollama">Ollama</option><option value="lm-studio">LM Studio</option>
         </select></label>
+        <label data-provider-api-mode hidden><span data-i18n="provider.apiMode">API mode</span><select name="apiMode">
+          <option value="responses">Responses API</option><option value="chat-completions">Chat Completions</option>
+        </select></label>
         <label><span data-i18n="provider.endpoint">Endpoint</span><input name="baseUrl" type="url" required></label>
-        <label><span data-i18n="provider.model">Model</span><input name="model" required></label>
+        <label><span data-i18n="provider.model">Model</span><span class="provider-model-control"><input name="model" list="provider-model-options" autocomplete="off" required maxlength="512"><button type="button" data-provider-sync-models data-i18n="provider.models.sync">Sync models</button></span></label>
+        <datalist id="provider-model-options"></datalist>
+        <p class="provider-model-status" data-model-status role="status" hidden></p>
         <div class="provider-secret-row">
           <span data-i18n="provider.apiKey">API Key</span>
           <span data-api-key-state></span>
@@ -153,14 +165,15 @@
         <label class="provider-check"><input name="privacyDisclosure" type="checkbox"><span data-i18n="provider.privacy.disclosure">I understand that task content is sent to this model service.</span></label>
         <label class="provider-check"><input name="insecureHttpApproved" type="checkbox"><span data-i18n="provider.http.approval">Allow public HTTP endpoint for this host.</span></label>
         <p class="provider-status" data-provider-status aria-live="polite"></p>
+      </form>
         <div class="provider-form-actions">
           <button type="button" data-provider-new data-i18n="provider.new">New</button>
           <button type="button" data-provider-delete data-i18n="provider.delete">Delete</button>
           <button type="button" data-provider-default data-i18n="provider.default">Set Default</button>
           <button type="button" data-provider-test data-i18n="provider.test">Test</button>
-          <button type="submit" class="primary" data-i18n="common.save">Save</button>
+          <button type="submit" form="provider-settings-form" class="primary" data-i18n="common.save">Save</button>
         </div>
-      </form>
+      </div>
     </div>
   </dialog>
   <script type="module" src="./main.ts"></script>

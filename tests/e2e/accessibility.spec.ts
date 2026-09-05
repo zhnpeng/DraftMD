@@ -49,7 +49,7 @@ test('supports keyboard-only foundation flow without clipping at 800x600 in redu
     await page.getByRole('button', { name: 'Switch to visual editor' }).focus()
     await page.keyboard.press('Enter')
     await expect(page.locator('.ProseMirror')).toBeVisible()
-    await page.keyboard.press('Meta+J')
+    await page.locator('#agent-input').focus()
     await expect(page.getByRole('separator', { name: 'Resize AI task dock' })).toBeVisible()
     await page.getByRole('button', { name: 'New conversation', exact: true }).focus()
     await page.keyboard.press('Enter')

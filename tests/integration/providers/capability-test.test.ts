@@ -18,6 +18,20 @@ const config = {
 }
 
 describe('provider capability test', () => {
+  it('rejects an empty probe instead of certifying chat support', async () => {
+    const persist = vi.fn()
+    const tester = createCapabilityTester({
+      materialize: vi.fn().mockResolvedValue({ config, apiKey: null, headers: {} }),
+      createAdapter: vi.fn().mockResolvedValue(adapter([
+        { type: 'completed', stopReason: 'end-turn', assistantMessage: { role: 'assistant', provider: 'openai-compatible', content: [], providerData: null } },
+      ])), persist, nonce: () => 'fixed-nonce', now: () => 100,
+    })
+    await expect(tester.testProvider(config.id, new AbortController().signal)).resolves.toMatchObject({
+      capability: 'unavailable', errorCode: 'EMPTY_RESPONSE',
+    })
+    expect(persist).toHaveBeenCalledWith(config.id, expect.objectContaining({ capability: 'unavailable', errorCode: 'EMPTY_RESPONSE' }), config)
+  })
+
   it.each([false, true])('does not advertise a discarded probe result (provider failure: %s)', async fails => {
     const tester = createCapabilityTester({
       materialize: vi.fn().mockResolvedValue({ config, apiKey: null, headers: {} }),

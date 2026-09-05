@@ -5,6 +5,22 @@ import { FakeProviderAdapter } from '../../helpers/fake-provider-adapter'
 
 const sessionId = '01991d5a-1c00-7000-8000-000000000001'
 
+it.each(['empty', 'whitespace', 'refusal'] as const)('fails visibly when a chat response is %s', async mode => {
+  const messages = { create: vi.fn() }
+  const runtime = new ChatRuntime({ messages, provider: new FakeProviderAdapter([() => [
+    { type: 'completed', stopReason: mode === 'refusal' ? 'refusal' : 'end-turn', assistantMessage: {
+      role: 'assistant', provider: 'openai-compatible', content: [{ type: 'text', text: mode === 'whitespace' ? '  \n' : '' }], providerData: null,
+    } },
+  ]]) })
+  const handle = runtime.start({ taskId: '01991d5a-1c00-7000-8000-000000000002', sessionId, prompt: 'ping', currentDocument: null, selection: null })
+  const events = []
+  for await (const event of handle.events) events.push(event)
+  const code = mode === 'refusal' ? 'REFUSAL' : 'EMPTY_RESPONSE'
+  expect(events).toContainEqual(expect.objectContaining({ type: 'error', code }))
+  await expect(handle.done).resolves.toMatchObject({ status: 'failed', errorCode: code })
+  expect(messages.create.mock.calls.map(([message]) => message.role)).toEqual(['user'])
+})
+
 it('exposes chat deltas before completion, cancels its provider, and persists partial text once', async () => {
   let providerSignal!: AbortSignal
   const messages = { create: vi.fn() }

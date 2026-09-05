@@ -33,7 +33,7 @@ function safeCode(error: unknown): ProviderErrorCode {
   const code = (error as { code?: unknown }).code
   if (typeof code === 'string' && [
     'AUTHENTICATION', 'RATE_LIMIT', 'INSUFFICIENT_QUOTA', 'MODEL_NOT_FOUND', 'CONTEXT_LIMIT',
-    'TIMEOUT', 'CONNECTION', 'BAD_REQUEST', 'REFUSAL', 'CANCELLED', 'PROVIDER_ERROR',
+    'TIMEOUT', 'CONNECTION', 'BAD_REQUEST', 'REFUSAL', 'CANCELLED', 'EMPTY_RESPONSE', 'PROVIDER_ERROR',
   ].includes(code)) return code as ProviderErrorCode
   return 'PROVIDER_ERROR'
 }
@@ -66,12 +66,17 @@ export function createCapabilityTester(dependencies: CapabilityTestDependencies)
         return { capability, cancelled: false, latencyMs, model: config.model, errorCode, warning }
       }
       let sawText = false
+      let refused = false
       let validTool = false
       let invalidTool = false
       try {
         const adapter = await dependencies.createAdapter(materialized)
         for await (const event of adapter.stream(request, signal)) {
-          if (event.type === 'text-delta' && event.text.length) sawText = true
+          if (event.type === 'text-delta' && event.text.trim()) sawText = true
+          if (event.type === 'completed') {
+            if (event.assistantMessage.content.some(block => block.type === 'text' && block.text.trim())) sawText = true
+            refused = event.stopReason === 'refusal' || event.stopReason === 'content-filter'
+          }
           if (event.type === 'tool-call') {
             const input = event.call.input as { nonce?: unknown }
             if (event.call.name === ECHO_TOOL.name && input?.nonce === nonce) validTool = true
@@ -83,6 +88,7 @@ export function createCapabilityTester(dependencies: CapabilityTestDependencies)
           model: config.model, errorCode: null, warning: null,
         }
         const latencyMs = Math.max(0, dependencies.now() - started)
+        if (!validTool && !invalidTool && !sawText) return finish('unavailable', latencyMs, refused ? 'REFUSAL' : 'EMPTY_RESPONSE')
         const capability = validTool ? 'agent' : 'chat-only'
         const warning = invalidTool ? 'INVALID_TOOL_CALL' : null
         return finish(capability, latencyMs, null, warning)

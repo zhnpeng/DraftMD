@@ -1,9 +1,10 @@
 import type OpenAI from 'openai'
-import type { NormalizedStopReason, ProviderEvent, ProviderMessage, ProviderRequest, ProviderKind } from '../../../shared/contracts/provider'
+import type { NormalizedStopReason, ProviderEvent, ProviderMessage, ProviderRequest, ProviderKind, ProviderApiMode } from '../../../shared/contracts/provider'
 import type { ProviderAdapter } from '../provider-adapter'
 import { ProviderError } from '../provider-errors'
 import { normalizeOpenAIError, type OpenAISDKModule } from './openai-errors'
-import { toOpenAIMessages, toOpenAITools } from './openai-messages'
+import { normalizeOptionalToolArguments, toOpenAIMessages, toOpenAITools } from './openai-messages'
+import { ResponsesAdapter } from './responses-adapter'
 
 export interface OpenAIClientBoundary {
   chat: { completions: {
@@ -62,6 +63,9 @@ export class OpenAIAdapter implements ProviderAdapter {
           stopReason = finishReason(choice.finish_reason) ?? stopReason
         }
       }
+      if (!text.trim() && calls.size === 0 && stopReason === 'unknown') {
+        throw new ProviderError({ code: 'EMPTY_RESPONSE', provider: this.config.kind, retryable: false, status: null, messageKey: 'provider.error.EMPTY_RESPONSE' })
+      }
       const content: ProviderMessage['content'] = []
       if (text) content.push({ type: 'text', text })
       const providerCalls: Array<{ id: string; type: 'function'; function: { name: string; arguments: string } }> = []
@@ -70,6 +74,8 @@ export class OpenAIAdapter implements ProviderAdapter {
         try { input = JSON.parse(call.arguments) } catch (error) {
           throw new ProviderError({ code: 'BAD_REQUEST', provider: this.config.kind, retryable: false, status: null, messageKey: 'provider.error.badRequest', cause: error })
         }
+        // Strict OpenAI schemas encode omitted optional arguments as null.
+        input = normalizeOptionalToolArguments(input, call.name, request.tools)
         const normalized = { id: call.id, name: call.name, input }
         content.push({ type: 'tool-call', call: normalized })
         providerCalls.push({ id: call.id, type: 'function', function: { name: call.name, arguments: call.arguments } })
@@ -90,10 +96,11 @@ export class OpenAIAdapter implements ProviderAdapter {
 }
 
 export async function createOpenAIAdapter(
-  input: { apiKey: string; model: string; timeoutMs: number },
+  input: { apiKey: string; model: string; timeoutMs: number; apiMode?: ProviderApiMode },
   importer: () => Promise<OpenAISDKModule> = () => import('openai'),
-): Promise<OpenAIAdapter> {
+): Promise<ProviderAdapter> {
   const sdk = await importer()
   const client = new sdk.default({ apiKey: input.apiKey, timeout: input.timeoutMs, maxRetries: 2 })
-  return new OpenAIAdapter(client, { kind: 'openai', model: input.model, baseUrl: 'https://api.openai.com/v1', timeoutMs: input.timeoutMs, toolsEnabled: true }, sdk)
+  const Adapter = input.apiMode === 'chat-completions' ? OpenAIAdapter : ResponsesAdapter
+  return new Adapter(client, { kind: 'openai', model: input.model, baseUrl: 'https://api.openai.com/v1', timeoutMs: input.timeoutMs, toolsEnabled: true }, sdk)
 }

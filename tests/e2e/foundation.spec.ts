@@ -3,6 +3,44 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { launchDraftMD } from '../helpers/electron-app'
 
+test('switches folder files in the same window and saves the previous document before replacement', async ({}, testInfo) => {
+  const app = await launchDraftMD({
+    locale: 'en',
+    prepare: async directory => {
+      await writeFile(join(directory, 'first.md'), '# First document\n\nOriginal content\n')
+      await writeFile(join(directory, 'second.md'), '# Second document\n\nSeparate content\n')
+    },
+  })
+  try {
+    const page = await app.windowMatching(async candidate => (await candidate.title()).includes('DraftMD'))
+    await app.evaluate(({ dialog }, directory) => {
+      dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] })
+    }, app.userDataPath)
+    await page.evaluate(() => window.draftmd.openWorkspace())
+    if (!await page.locator('#file-list').isVisible()) await page.locator('#file-toggle-btn').click()
+    await page.locator('#file-list button[data-path="first.md"]').click()
+    await expect(page.locator('#file-title')).toHaveText('first.md')
+    const windowIds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(win => win.id).sort())
+    const editor = page.locator('#editor .ProseMirror')
+    await expect(editor).toContainText('First document')
+    await editor.click()
+    await page.keyboard.press('ControlOrMeta+End')
+    await page.keyboard.type(' Saved before switching')
+    await page.locator('#file-list button[data-path="second.md"]').click()
+    await expect(page.locator('#file-title')).toHaveText('second.md')
+    await expect(editor).toContainText('Separate content')
+    await expect(editor).not.toContainText('Original content')
+    expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(win => win.id).sort())).toEqual(windowIds)
+    expect(await readFile(join(app.userDataPath, 'first.md'), 'utf8')).toContain('Saved before switching')
+    expect(await readFile(join(app.userDataPath, 'second.md'), 'utf8')).toBe('# Second document\n\nSeparate content\n')
+    await page.locator('#file-list button[data-path="first.md"]').click()
+    await expect(page.locator('#file-title')).toHaveText('first.md')
+    await expect(editor).toContainText('Saved before switching')
+    expect(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(win => win.id).sort())).toEqual(windowIds)
+    await page.screenshot({ path: testInfo.outputPath('folder-file-switch.png') })
+  } finally { await app.cleanup() }
+})
+
 test('opens a temporary Markdown document and edits without a model', async () => {
   const app = await launchDraftMD({
     prepare: (directory) => writeFile(join(directory, 'foundation.md'), '# Foundation\n\nInitial text\n', 'utf8'),

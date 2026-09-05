@@ -41,7 +41,7 @@ it('routes workspace operations through validated main handlers', async () => {
     list: vi.fn().mockResolvedValue([{ name: 'docs', path: 'docs', kind: 'directory' }]),
     resolveFile: vi.fn().mockResolvedValue('/work/project/docs/spec.md'),
   }
-  const windowManager = { openFile: vi.fn() }
+  const windowManager = { openFile: vi.fn(), loadFileInWindow: vi.fn().mockResolvedValue({ path: '/work/project/docs/spec.md', content: '# Spec', version: 'version' }) }
   registerIpcHandlers({
     windowManager, workspaceManager, locale: () => 'en', writeFile: vi.fn(), rebuildMenu: vi.fn(),
     reportTheme: vi.fn(), loadSystemFonts: vi.fn().mockResolvedValue([]),
@@ -56,7 +56,10 @@ it('routes workspace operations through validated main handlers', async () => {
   ])
   await expect(electron.handlers.get('open-workspace-file')?.({ sender: win.webContents }, 'docs/spec.md')).resolves.toBe(true)
   expect(workspaceManager.list).toHaveBeenCalledWith(1, 'docs')
-  expect(windowManager.openFile).toHaveBeenCalledWith('/work/project/docs/spec.md', win)
+  expect(windowManager.loadFileInWindow).toHaveBeenCalledWith(win, '/work/project/docs/spec.md')
+  expect(windowManager.openFile).not.toHaveBeenCalled()
+  windowManager.loadFileInWindow.mockResolvedValueOnce(null as never)
+  await expect(electron.handlers.get('open-workspace-file')?.({ sender: win.webContents }, 'docs/spec.md')).resolves.toBe(false)
 })
 
 
@@ -107,12 +110,24 @@ it('previews diagnostics and exports only after a save destination is chosen', a
   } as never)
 
   await expect(electron.handlers.get('diagnostics-preview')?.({ sender: {} })).resolves.toEqual(preview)
-  vi.mocked(dialog.showSaveDialog).mockResolvedValueOnce({ canceled: true, filePath: undefined })
+  vi.mocked(dialog.showSaveDialog).mockResolvedValueOnce({ canceled: true, filePath: '' })
   await expect(electron.handlers.get('diagnostics-export')?.({ sender: {} })).resolves.toBe(false)
   expect(diagnostics.export).not.toHaveBeenCalled()
   vi.mocked(dialog.showSaveDialog).mockResolvedValueOnce({ canceled: false, filePath: '/tmp/DraftMD-diagnostics.json' })
   await expect(electron.handlers.get('diagnostics-export')?.({ sender: {} })).resolves.toBe(true)
   expect(diagnostics.export).toHaveBeenCalledWith('/tmp/DraftMD-diagnostics.json')
+})
+
+it('validates model discovery drafts and refuses secret-bearing result fields', async () => {
+  const listProviderModels = vi.fn().mockResolvedValue({ models: [{ id: 'vendor-model', name: 'Vendor Model' }], errorCode: null, truncated: false })
+  registerIpcHandlers({ listProviderModels } as never)
+  const invoke = electron.handlers.get('provider-models')!
+  const draft = { kind: 'openai-compatible', baseUrl: 'http://127.0.0.1:11434/v1', timeoutMs: 1000, insecureHttpApproved: false }
+  await expect(invoke({ sender: {} }, draft, { apiKey: 'write-only-secret' })).resolves.toMatchObject({ models: [{ id: 'vendor-model', name: 'Vendor Model' }] })
+  expect(listProviderModels).toHaveBeenCalledWith(draft, { apiKey: 'write-only-secret' })
+  await expect(invoke({ sender: {} }, { ...draft, baseUrl: 'invalid' }, {})).rejects.toThrow('IPC contract violation')
+  listProviderModels.mockResolvedValueOnce({ models: [], errorCode: null, truncated: false, apiKey: 'should-not-return' })
+  await expect(invoke({ sender: {} }, draft, {})).rejects.toThrow('IPC contract violation')
 })
 
 

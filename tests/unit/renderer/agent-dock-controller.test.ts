@@ -2,14 +2,15 @@ import { describe, expect, it, vi } from 'vitest'
 import { createAgentDockState } from '../../../src/renderer/agent/agent-dock-controller'
 
 describe('agent dock state', () => {
-  it('clamps persisted height between 180px and 65vh', () => {
-    expect(createAgentDockState({ viewportHeight: 800, storedHeight: 50 }).height).toBe(180)
-    expect(createAgentDockState({ viewportHeight: 800, storedHeight: 900 }).height).toBe(520)
-    expect(createAgentDockState({ viewportHeight: 800, storedHeight: 340 }).height).toBe(340)
+  it('clamps sidebar width while leaving half the window for documents', () => {
+    expect(createAgentDockState({ viewportWidth: 800, storedWidth: 50 }).width).toBe(300)
+    expect(createAgentDockState({ viewportWidth: 800, storedWidth: 900 }).width).toBe(400)
+    expect(createAgentDockState({ viewportWidth: 1600, storedWidth: 900 }).width).toBe(640)
+    expect(createAgentDockState({ viewportWidth: 800, storedWidth: null }).width).toBe(360)
   })
 
   it('collapses only when input is empty and no approval is pending', () => {
-    const state = createAgentDockState({ viewportHeight: 800, storedHeight: null })
+    const state = createAgentDockState({ viewportWidth: 800, storedWidth: null })
     state.open()
     expect(state.collapse({ input: 'draft', waitingApproval: false })).toBe(false)
     expect(state.collapse({ input: '', waitingApproval: true })).toBe(false)
@@ -18,7 +19,7 @@ describe('agent dock state', () => {
   })
 
   it('collapsing never changes the busy task state', () => {
-    const state = createAgentDockState({ viewportHeight: 800, storedHeight: null })
+    const state = createAgentDockState({ viewportWidth: 800, storedWidth: null })
     state.open(); state.setBusy(true)
     state.collapse({ input: '', waitingApproval: false })
     expect(state.busy).toBe(true)
@@ -38,7 +39,8 @@ it('remembers a stop requested before the task id arrives and consumes it once',
 import { resizeKeyDelta } from '../../../src/renderer/agent/agent-dock-controller'
 
 it('maps separator arrow keys to deterministic dock resize deltas', () => {
-  expect(resizeKeyDelta('ArrowUp')).toBe(16)
-  expect(resizeKeyDelta('ArrowDown')).toBe(-16)
+  expect(resizeKeyDelta('ArrowLeft')).toBe(16)
+  expect(resizeKeyDelta('ArrowRight')).toBe(-16)
+  expect(resizeKeyDelta('ArrowUp')).toBe(0)
   expect(resizeKeyDelta('Home')).toBe(0)
 })

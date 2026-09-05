@@ -8,7 +8,7 @@ export async function exportPDF(win: BrowserWindow, path: string, deps: PdfExpor
   try {
     const background = await win.webContents.executeJavaScript('getComputedStyle(document.body).backgroundColor') as string
     const cssKey = await win.webContents.insertCSS(
-      `@page { margin: 0; } html, body, #editor { height: auto !important; overflow: visible !important; background: ${background} !important; } #titlebar, #file-panel, #source-editor, #update-banner, #agent-dock { display: none !important; } #editor { margin-left: 0 !important; padding: 20mm !important; } #editor .ProseMirror { min-height: auto !important; }`,
+      `@page { margin: 0; } html, body, #editor { height: auto !important; overflow: visible !important; background: ${background} !important; } body { padding: 0 !important; } #titlebar, #file-panel, #source-editor, #update-banner, #agent-dock { display: none !important; } #editor { width: 100% !important; margin-left: 0 !important; padding: 20mm !important; } #editor .ProseMirror { min-height: auto !important; }`,
     )
     try {
       const pdfData = await win.webContents.printToPDF({

@@ -29,6 +29,7 @@ interface ProviderRow {
 function fromRow(row: ProviderRow): ProviderConfigRecord {
   const config = ProviderConfigSchema.parse({
     id: row.id, name: row.name, kind: row.provider_type, preset: row.preset,
+    apiMode: JSON.parse(row.settings_json).apiMode ?? 'chat-completions',
     baseUrl: row.endpoint, model: row.model, credentialRef: row.credential_ref,
     headerCredentialRefs: JSON.parse(row.header_credential_refs_json), timeoutMs: row.timeout_ms,
     streamEnabled: Boolean(row.stream_enabled), toolsEnabled: Boolean(row.tools_enabled),
@@ -44,12 +45,13 @@ export function createProviderConfigRepository(database: Database.Database) {
     preset, header_credential_refs_json, timeout_ms, stream_enabled, tools_enabled,
     insecure_http_approved, capability, last_tested_at, last_test_error_code, is_default
   ) values (
-    @id, @name, @kind, @baseUrl, @model, @credentialRef, '{}', @createdAt, @updatedAt,
+    @id, @name, @kind, @baseUrl, @model, @credentialRef, @settingsJson, @createdAt, @updatedAt,
     @preset, @headerCredentialRefsJson, @timeoutMs, @streamEnabled, @toolsEnabled,
     @insecureHttpApproved, @capability, @lastTestedAt, @lastTestErrorCode, @isDefault
   ) on conflict(id) do update set
     name=excluded.name, provider_type=excluded.provider_type, endpoint=excluded.endpoint, model=excluded.model,
     credential_ref=excluded.credential_ref, updated_at=excluded.updated_at, preset=excluded.preset,
+    settings_json=json_patch(provider_configs.settings_json, excluded.settings_json),
     header_credential_refs_json=excluded.header_credential_refs_json, timeout_ms=excluded.timeout_ms,
     stream_enabled=excluded.stream_enabled, tools_enabled=excluded.tools_enabled,
     insecure_http_approved=excluded.insecure_http_approved, capability=excluded.capability,
@@ -78,6 +80,7 @@ export function createProviderConfigRepository(database: Database.Database) {
     save(record: ProviderConfigRecord & { createdAt: string; updatedAt: string }): void {
       save.run({
         ...record,
+        settingsJson: JSON.stringify({ apiMode: record.apiMode }),
         headerCredentialRefsJson: JSON.stringify(record.headerCredentialRefs),
         streamEnabled: Number(record.streamEnabled), toolsEnabled: Number(record.toolsEnabled),
         insecureHttpApproved: Number(record.insecureHttpApproved), isDefault: Number(record.isDefault),

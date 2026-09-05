@@ -2,6 +2,10 @@
 
 DraftMD supports model services through the official Anthropic and OpenAI SDKs plus an OpenAI-compatible adapter.
 
+OpenAI and custom endpoints expose an **API mode** selector: **Responses API** or **Chat Completions**. New remote configurations default to Responses; Ollama and LM Studio presets default to Chat Completions. Existing configurations retain their previous protocol until explicitly changed. Both modes stream text and support the document Agent's file tools when the service and model support function calling.
+
+Responses uses the official SDK stream accumulator and strict tool argument parser. DraftMD sends `store: false` and carries output items, encrypted reasoning, and function results locally between tool rounds. File edits still pass through DraftMD's workspace validation, approval rules, version checks, and undo snapshots. A failed Responses request never silently falls back to another protocol. A missing Responses endpoint is reported in the settings and task UI.
+
 | Provider | Configuration | Expected capability |
 | --- | --- | --- |
 | Anthropic | API key, endpoint, Claude model | Agent when tool use is supported |

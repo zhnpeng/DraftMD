@@ -1,8 +1,9 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import { once } from 'node:events'
+import { sendResponsesSSE } from './responses-sse'
 
 export type MockProviderStyle = 'openai' | 'anthropic'
-export type MockProviderMode = 'agent' | 'chat-only' | 'malformed-tool' | 'auth-error' | 'rate-limit' | 'timeout' | 'agent-task' | 'agent-stop-before' | 'agent-stop-after' | 'agent-delete-one' | 'agent-delete-two' | 'agent-delete-stale' | 'agent-diff-task' | 'acceptance-meeting-sync' | 'acceptance-create-design' | 'acceptance-selection-completion'
+export type MockProviderMode = 'agent' | 'chat-only' | 'html-response' | 'malformed-tool' | 'auth-error' | 'rate-limit' | 'timeout' | 'agent-task' | 'agent-stop-before' | 'agent-stop-after' | 'agent-delete-one' | 'agent-delete-two' | 'agent-delete-stale' | 'agent-diff-task' | 'acceptance-meeting-sync' | 'acceptance-create-design' | 'acceptance-selection-completion'
 
 export interface MockProviderServer {
   baseUrl: string
@@ -25,6 +26,7 @@ function redactHeaders(headers: IncomingMessage['headers']): Record<string, stri
 }
 
 function sendSSE(response: ServerResponse, events: unknown[]): void {
+  if (response.req.url?.endsWith('/responses')) { sendResponsesSSE(response, events); return }
   response.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' })
   for (const event of events) response.write(`data: ${JSON.stringify(event)}\n\n`)
   response.end('data: [DONE]\n\n')
@@ -40,9 +42,30 @@ export async function startMockProviderServer(mode: MockProviderMode, style: Moc
   let releaseDelete!: () => void
   const deleteBarrier = new Promise<void>((resolve) => { releaseDelete = resolve })
   const server = createServer(async (request, response) => {
-    const requestBody = await body(request).catch(() => null)
+    let requestBody = await body(request).catch(() => null)
     requests.push({ method: request.method ?? '', url: request.url ?? '', headers: redactHeaders(request.headers), body: requestBody })
+    if (request.url?.endsWith('/responses') && requestBody) {
+      const payload = requestBody as { input: any[]; tools?: any[] }
+      const calls = new Set(payload.input.filter(item => item.type === 'function_call').map(item => item.call_id))
+      const results = new Set(payload.input.filter(item => item.type === 'function_call_output').map(item => item.call_id))
+      const invalid = payload.tools?.some(tool => tool.function || (tool.strict && Object.keys(tool.parameters.properties).some(key => !tool.parameters.required.includes(key))))
+        || payload.input.some(item => item.type === 'function_call_output' && !calls.has(item.call_id))
+        || [...calls].some(id => !results.has(id))
+      if (invalid) {
+        response.writeHead(400, { 'content-type': 'application/json' })
+        response.end(JSON.stringify({ error: { code: 'invalid_function_parameters' } }))
+        return
+      }
+      requestBody = { ...payload, tools: payload.tools?.map(tool => ({ type: 'function', function: tool })),
+        messages: payload.input.map(item => item.type === 'function_call_output'
+          ? { role: 'tool', tool_call_id: item.call_id, content: item.output } : item) }
+    }
     if (mode === 'timeout') return
+    if (mode === 'html-response') {
+      response.writeHead(200, { 'content-type': 'text/html' })
+      response.end('<html><body>Provider dashboard</body></html>')
+      return
+    }
     if (mode === 'auth-error') {
       response.writeHead(401, { 'content-type': 'application/json' })
       response.end(JSON.stringify({ error: { message: 'invalid secret', type: 'authentication_error' } }))
@@ -52,6 +75,15 @@ export async function startMockProviderServer(mode: MockProviderMode, style: Moc
       response.writeHead(429, { 'content-type': 'application/json', 'retry-after': '1' })
       response.end(JSON.stringify({ error: { message: 'slow down', type: 'rate_limit_error' } }))
       return
+    }
+    if (style === 'openai') {
+      const payload = requestBody as { tools?: Array<{ function?: { strict?: boolean; parameters?: { properties?: Record<string, unknown>; required?: string[] } } }> } | null
+      const invalid = payload?.tools?.some(tool => tool.function?.strict && Object.keys(tool.function.parameters?.properties ?? {}).some(key => !tool.function?.parameters?.required?.includes(key)))
+      if (invalid) {
+        response.writeHead(400, { 'content-type': 'application/json' })
+        response.end(JSON.stringify({ error: { code: 'invalid_function_parameters', message: 'Strict tools require every property in required.' } }))
+        return
+      }
     }
     const nonce = nonceFromRequest(requestBody)
     if (['agent-task', 'agent-stop-before', 'agent-stop-after', 'agent-delete-one', 'agent-delete-two', 'agent-delete-stale', 'agent-diff-task', 'acceptance-meeting-sync', 'acceptance-create-design', 'acceptance-selection-completion'].includes(mode) && style === 'openai') {
@@ -171,7 +203,7 @@ export async function startMockProviderServer(mode: MockProviderMode, style: Moc
         return
       }
       if (toolMessages.length === 0) {
-        sendSSE(response, [{ ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: 'call-read', type: 'function', function: { name: 'read_markdown', arguments: JSON.stringify({ path: 'task.md' }) } }] }, finish_reason: 'tool_calls' }] }])
+        sendSSE(response, [{ ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: 'call-read', type: 'function', function: { name: 'read_markdown', arguments: JSON.stringify({ path: 'task.md', heading: null, startLine: null, endLine: null }) } }] }, finish_reason: 'tool_calls' }] }])
         return
       }
       if (toolMessages.length === 1) {

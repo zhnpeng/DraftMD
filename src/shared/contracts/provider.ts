@@ -10,17 +10,23 @@ export const JsonValueSchema: z.ZodType<unknown> = z.lazy(() => z.union([
 
 export const ProviderKindSchema = z.enum(['anthropic', 'openai', 'openai-compatible'])
 export const ProviderPresetSchema = z.enum(['none', 'ollama', 'lm-studio'])
+export const ProviderApiModeSchema = z.enum(['responses', 'chat-completions'])
+export type ProviderApiMode = z.infer<typeof ProviderApiModeSchema>
+export function providerApiMode(config: { kind: ProviderKind; apiMode?: ProviderApiMode }): ProviderApiMode {
+  return config.apiMode ?? (config.kind === 'openai' ? 'responses' : 'chat-completions')
+}
 export const ProviderCapabilitySchema = z.enum(['agent', 'chat-only', 'unavailable'])
 export const ProviderErrorCodeSchema = z.enum([
   'AUTHENTICATION', 'RATE_LIMIT', 'INSUFFICIENT_QUOTA', 'MODEL_NOT_FOUND',
   'CONTEXT_LIMIT', 'TIMEOUT', 'CONNECTION', 'BAD_REQUEST', 'REFUSAL',
-  'CANCELLED', 'PROVIDER_ERROR',
+  'CANCELLED', 'EMPTY_RESPONSE', 'API_UNSUPPORTED', 'PROVIDER_ERROR',
 ])
 
 export const ProviderConfigSchema = z.object({
   id: UUIDv7Schema,
   name: z.string().min(1).max(256),
   kind: ProviderKindSchema,
+  apiMode: ProviderApiModeSchema.optional(),
   preset: ProviderPresetSchema,
   baseUrl: z.string().url().max(4096),
   model: z.string().min(1).max(512),
@@ -128,6 +134,7 @@ export const ProviderConfigInputSchema = z.object({
   id: UUIDv7Schema.optional(),
   name: z.string().min(1).max(256),
   kind: ProviderKindSchema,
+  apiMode: ProviderApiModeSchema.optional(),
   preset: ProviderPresetSchema,
   baseUrl: z.string().url().max(4096),
   model: z.string().min(1).max(512),
@@ -148,6 +155,7 @@ export const ProviderConfigDTOSchema = z.object({
   id: UUIDv7Schema,
   name: z.string().min(1).max(256),
   kind: ProviderKindSchema,
+  apiMode: ProviderApiModeSchema.optional(),
   preset: ProviderPresetSchema,
   baseUrl: z.string().url().max(4096),
   model: z.string().min(1).max(512),
@@ -176,3 +184,19 @@ export type ProviderConfigInput = z.infer<typeof ProviderConfigInputSchema>
 export type ProviderSecretsInput = z.infer<typeof ProviderSecretsInputSchema>
 export type ProviderConfigDTO = z.infer<typeof ProviderConfigDTOSchema>
 export type CapabilityTestResult = z.infer<typeof CapabilityTestResultSchema>
+
+export const ProviderModelListInputSchema = ProviderConfigInputSchema.pick({
+  id: true, kind: true, baseUrl: true, timeoutMs: true, insecureHttpApproved: true,
+})
+export const ProviderModelSchema = z.object({
+  id: z.string().min(1).max(512),
+  name: z.string().min(1).max(512),
+}).strict()
+export const ProviderModelListResultSchema = z.object({
+  models: z.array(ProviderModelSchema).max(1000),
+  errorCode: z.union([ProviderErrorCodeSchema, z.enum(['MODEL_LIST_UNSUPPORTED', 'SAVED_CREDENTIALS_MISMATCH'])]).nullable(),
+  truncated: z.boolean(),
+}).strict()
+export type ProviderModelListInput = z.infer<typeof ProviderModelListInputSchema>
+export type ProviderModelListResult = z.infer<typeof ProviderModelListResultSchema>
+export type ProviderModel = z.infer<typeof ProviderModelSchema>

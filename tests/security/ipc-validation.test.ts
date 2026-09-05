@@ -18,6 +18,7 @@ const valid: Record<keyof typeof IpcInvokeSchemas, unknown[]> = {
   'agent-respond-approval': [{ taskId: uuid, approvalId: 'approval', decision: 'deny' }],
   'agent-list-interrupted': [], 'agent-keep-interrupted': [uuid], 'agent-undo-interrupted': [uuid],
   'provider-list': [], 'provider-save': [providerInput, {}], 'provider-test': [uuid], 'provider-set-default': [uuid],
+  'provider-models': [{ kind: 'openai-compatible', baseUrl: providerInput.baseUrl, timeoutMs: 1000, insecureHttpApproved: false }, {}],
   'provider-delete': [uuid, false], 'current-document-version': [], 'diagnostics-preview': [], 'diagnostics-export': [], 'open-workspace': [],
   'list-workspace-files': [''], 'open-workspace-file': ['note.md'], 'open-file': [], 'open-file-path': ['/tmp/note.md'],
   'list-siblings': [], 'open-sibling': ['/tmp/note.md'], 'save-file': ['# Note', '/tmp/note.md', false],
