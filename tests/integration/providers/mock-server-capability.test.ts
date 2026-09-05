@@ -18,7 +18,7 @@ async function run(mode: MockProviderMode) {
   const tester = createCapabilityTester({
     materialize: async () => ({ config, apiKey: null, headers: { Authorization: 'Bearer known-secret' } }),
     createAdapter: createProviderAdapter,
-    persist: (_configId, result) => persisted.push(result),
+    persist: (_configId, result) => { persisted.push(result) },
     nonce: () => 'fixed-nonce', now: Date.now,
   })
   return { server, persisted, result: tester.testProvider(id, new AbortController().signal) }

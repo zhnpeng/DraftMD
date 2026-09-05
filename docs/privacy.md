@@ -15,6 +15,16 @@ DraftMD stores the following under the current macOS user account:
 
 Deleting a conversation does not delete Markdown files. Deleting a provider configuration can optionally remove its Keychain secrets. Task snapshots are local and are not part of diagnostics exports.
 
+### Snapshot retention
+
+In the current source tree, after interrupted-task recovery succeeds at startup, DraftMD runs background cleanup of snapshot directories. It removes a directory only when no task in the local database references it and its last modification time is more than 30 days ago. Every persisted task is protected, across all workspaces and statuses, including completed and undone tasks.
+
+Deleting a conversation removes its task references, making those snapshots eligible at a later startup once their directory age exceeds 30 days. The 30 days are measured from the snapshot directory's modification time, not from conversation deletion. Saved conversations can therefore retain snapshots indefinitely; this policy does not impose a total storage limit. Cleanup never removes the original workspace documents.
+
+Cleanup is skipped if task recovery fails, the database reports recovery or an in-memory fallback, or a quarantined `draftmd.corrupt.<timestamp>.sqlite` backup remains in the app data directory. Keeping that backup also protects snapshots on later launches. Resolve database recovery and determine whether its history is needed before removing a quarantined backup. Cleanup errors produce safe diagnostic codes when logging is available and do not block startup.
+
+See the [roadmap](roadmap.md) for the release status of this maintenance behavior.
+
 ## Model providers
 
 DraftMD contacts a model provider only after the user configures one and starts a capability test, chat, or task. Depending on the action, the request can include:

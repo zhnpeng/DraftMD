@@ -18,6 +18,19 @@ const config = {
 }
 
 describe('provider capability test', () => {
+  it.each([false, true])('does not advertise a discarded probe result (provider failure: %s)', async fails => {
+    const tester = createCapabilityTester({
+      materialize: vi.fn().mockResolvedValue({ config, apiKey: null, headers: {} }),
+      createAdapter: vi.fn().mockResolvedValue(adapter(fails ? [
+        new ProviderError({ code: 'AUTHENTICATION', provider: 'openai-compatible', retryable: false, status: 401, messageKey: 'provider.error.authentication' }),
+      ] : [{ type: 'tool-call', call: { id: '1', name: 'draftmd_capability_echo', input: { nonce: 'fixed-nonce' } } }])),
+      persist: vi.fn(() => false), nonce: () => 'fixed-nonce', now: () => 100,
+    })
+    await expect(tester.testProvider(config.id, new AbortController().signal)).resolves.toMatchObject({
+      capability: 'unavailable', cancelled: true, errorCode: null, warning: 'CONFIG_CHANGED',
+    })
+  })
+
   it('classifies streaming plus exact echo tool use as agent', async () => {
     const persist = vi.fn()
     const tester = createCapabilityTester({
@@ -32,7 +45,7 @@ describe('provider capability test', () => {
     await expect(tester.testProvider(config.id, new AbortController().signal)).resolves.toEqual({
       capability: 'agent', cancelled: false, latencyMs: 0, model: 'test-model', errorCode: null, warning: null,
     })
-    expect(persist).toHaveBeenCalledWith(config.id, expect.objectContaining({ capability: 'agent' }))
+    expect(persist).toHaveBeenCalledWith(config.id, expect.objectContaining({ capability: 'agent' }), config)
     const request = (tester.dependencies.createAdapter as ReturnType<typeof vi.fn>).mock.results[0]
     expect(request).toBeDefined()
   })
@@ -76,7 +89,7 @@ describe('provider capability test', () => {
     await expect(tester.testProvider(config.id, new AbortController().signal)).resolves.toMatchObject({
       capability: 'chat-only', errorCode: null, warning: 'INVALID_TOOL_CALL',
     })
-    expect(persist).toHaveBeenCalledWith(config.id, expect.objectContaining({ capability: 'chat-only', errorCode: null }))
+    expect(persist).toHaveBeenCalledWith(config.id, expect.objectContaining({ capability: 'chat-only', errorCode: null }), config)
   })
 
   it('classifies provider failures as unavailable with a safe code', async () => {
@@ -90,7 +103,7 @@ describe('provider capability test', () => {
     await expect(tester.testProvider(config.id, new AbortController().signal)).resolves.toMatchObject({
       capability: 'unavailable', errorCode: 'AUTHENTICATION',
     })
-    expect(persist).toHaveBeenCalledWith(config.id, expect.objectContaining({ errorCode: 'AUTHENTICATION' }))
+    expect(persist).toHaveBeenCalledWith(config.id, expect.objectContaining({ errorCode: 'AUTHENTICATION' }), config)
   })
 
   it('does not persist or replace the previous capability when cancelled', async () => {

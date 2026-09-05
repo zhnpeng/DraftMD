@@ -48,6 +48,10 @@ export function createAgentDockApp(input: {
   let taskState: ReturnType<typeof createTaskViewState> | null = null
   let pendingDeleteSessionId: string | null = null
   let historyGeneration = 0
+  let starting = false
+  let startingEvents: TaskEvent[] = []
+  let historyEvents: TaskEvent[] | null = null
+  let taskMode: 'agent' | 'suggestion' = 'agent'
   const pendingStop = createPendingStop()
   const approvalQueue = createDeleteApprovalQueue()
 
@@ -61,8 +65,8 @@ export function createAgentDockApp(input: {
   })
 
   const deltaBatcher = createDeltaBatcher({
-    requestFrame: requestAnimationFrame,
-    cancelFrame: cancelAnimationFrame,
+    requestFrame: callback => requestAnimationFrame(callback),
+    cancelFrame: id => cancelAnimationFrame(id),
     render: (text) => {
       if (!taskState) return
       const nearBottom = shouldAutoScroll(messageLog)
@@ -87,19 +91,21 @@ export function createAgentDockApp(input: {
     }
   }
   const showTaskChanges = async (taskId: string, undoable: boolean): Promise<void> => {
+    const generation = historyGeneration
     try {
       const changeSet = await input.api.getAgentTaskChanges(taskId)
+      if (generation !== historyGeneration) return
       if (!changeSet.changes.length) return
       renderChangeSet(changeSummary, changeSet, undoable ? () => undoTask(taskId) : () => {})
       const button = changeSummary.querySelector<HTMLButtonElement>('.agent-undo-task')
       if (button && !undoable) button.hidden = true
-    } catch { changeSummary.hidden = true }
+    } catch { if (generation === historyGeneration) changeSummary.hidden = true }
   }
 
   const loadHistory = async (sessionId: string | null): Promise<void> => {
     const generation = ++historyGeneration
     deltaBatcher.flush()
-    activeTaskId = null
+    historyEvents = []
     approvalQueue.clear()
     renderCurrentApproval()
     taskState = null
@@ -107,13 +113,30 @@ export function createAgentDockApp(input: {
     activities.replaceChildren()
     changeSummary.replaceChildren(); changeSummary.hidden = true
     statusElement.textContent = msg('dock.ready')
-    if (!sessionId) return
-    const history = await input.api.getSessionHistory(sessionId)
+    if (!sessionId) { historyEvents = null; return }
+    let history
+    try { history = await input.api.getSessionHistory(sessionId) }
+    catch {
+      if (generation === historyGeneration) { historyEvents = null; statusElement.textContent = msg('dock.historyFailed') }
+      return
+    }
     if (generation !== historyGeneration || sessions.state().currentSessionId !== sessionId) return
+    const buffered = historyEvents ?? []
+    historyEvents = null
     const providers = sessions.state().providers
     for (const message of history.messages) {
       if (message.role === 'model-switch') renderSystemMessage(messageLog, modelSwitchText(message.providerConfigId, providers))
       else renderMessage(messageLog, message.role, message.text)
+    }
+    if (history.liveTask) {
+      activeTaskId = history.liveTask.taskId
+      taskMode = history.liveTask.mode
+      taskState = createTaskViewState(activeTaskId)
+      dock.setBusy(true)
+      modelButton.disabled = true
+      for (const event of [...history.liveTask.events, ...buffered]) onTaskEvent(event)
+      deltaBatcher.flush()
+      return
     }
     if (history.latestTask) {
       for (const activity of history.latestTask.activities) renderPersistedActivity(activities, activity)
@@ -145,39 +168,63 @@ export function createAgentDockApp(input: {
     })
   }
   const send = async (text: string): Promise<void> => {
-    const workspaceId = input.currentWorkspaceId()
-    await sessions.refreshProviders()
-    const state = sessions.state()
-    refreshHeader()
-    if (!workspaceId) { statusElement.textContent = msg('dock.openWorkspace'); dock.open(); return }
-    if (!state.providerId) { statusElement.textContent = msg('dock.configureModel'); dock.open(); return }
-    if (input.document.isDirty() && !await input.document.flushSave()) return
-    renderMessage(messageLog, 'user', text)
-    dock.setBusy(true); dock.open(); statusElement.textContent = msg('dock.preparing')
+    if (starting || activeTaskId) return
+    starting = true
+    startingEvents = []
+    pendingStop.clear()
+    closeMenus()
+    dock.setBusy(true)
+    sessionButton.disabled = true
+    modelButton.disabled = true
     try {
+      const workspaceId = input.currentWorkspaceId()
+      await sessions.refreshProviders()
+      const state = sessions.state()
+      refreshHeader()
+      if (!workspaceId) { statusElement.textContent = msg('dock.openWorkspace'); dock.open(); return }
+      if (!state.providerId) { statusElement.textContent = msg('dock.configureModel'); dock.open(); return }
+      if (input.document.isDirty() && !await input.document.flushSave()) return
+      ++historyGeneration
+      historyEvents = null
+      deltaBatcher.flush()
+      taskState = null
+      approvalQueue.clear()
+      renderCurrentApproval()
+      activities.replaceChildren()
+      changeSummary.replaceChildren(); changeSummary.hidden = true
+      renderMessage(messageLog, 'user', text)
+      dock.setBusy(true); dock.open(); statusElement.textContent = msg('dock.preparing')
       const result = await input.api.startAgentTask({
         workspaceId, sessionId: state.currentSessionId ?? undefined, providerConfigId: state.providerId,
         prompt: text, currentPath: input.document.currentPath(), currentContent: input.document.currentContent(), selection,
       })
-      sessions.selectSession(result.sessionId)
-      if (result.mode === 'suggestion') {
-        renderMessage(messageLog, 'assistant', result.suggestion ?? '')
-        statusElement.textContent = msg('dock.suggestion')
-        dock.setBusy(false)
-      } else if (result.taskId) {
+      taskMode = result.mode
+      if (result.taskId) {
         activeTaskId = result.taskId
         taskState = createTaskViewState(result.taskId)
         const stopTaskId = pendingStop.attach(result.taskId)
         if (stopTaskId) void input.api.stopAgentTask(stopTaskId)
+      } else if (result.mode === 'suggestion') {
+        renderMessage(messageLog, 'assistant', result.suggestion ?? '')
+        statusElement.textContent = msg('dock.suggestion')
       }
       const refreshed = input.currentWorkspaceId(); if (refreshed) await sessions.setWorkspace(refreshed)
+      sessions.selectSession(result.sessionId)
       refreshHeader()
+      starting = false
+      for (const event of startingEvents) onTaskEvent(event)
+      startingEvents = []
     } catch (error) {
       const key = selectionErrorMessageKey(error)
       if (key) setSelection(null)
       statusElement.textContent = msg(key ?? 'dock.startFailed')
       pendingStop.clear()
-      dock.setBusy(false)
+    } finally {
+      starting = false
+      startingEvents = []
+      sessionButton.disabled = false
+      modelButton.disabled = activeTaskId !== null
+      dock.setBusy(activeTaskId !== null)
     }
   }
   const renderCurrentApproval = (): void => {
@@ -197,6 +244,15 @@ export function createAgentDockApp(input: {
   }
 
   const onTaskEvent = (event: TaskEvent): void => {
+    if (starting) { startingEvents.push(event); return }
+    const terminal = event.type === 'status' && ['completed', 'partial-complete', 'stopped', 'failed', 'undone', 'undo-conflict'].includes(event.status)
+    if (event.taskId === activeTaskId && terminal) {
+      activeTaskId = null
+      pendingStop.clear()
+      dock.setBusy(false)
+      modelButton.disabled = false
+    }
+    if (historyEvents) { historyEvents.push(event); return }
     if (!taskState || event.taskId !== taskState.taskId) return
     const previous = taskState
     taskState = reduceTaskEvent(taskState, event)
@@ -209,12 +265,11 @@ export function createAgentDockApp(input: {
     } else if (event.type === 'change-set') {
       renderChangeSet(changeSummary, event.changeSet, () => undoTask(event.taskId))
     } else if (event.type === 'status') {
-      const terminal = ['completed', 'partial-complete', 'stopped', 'failed', 'undone', 'undo-conflict'].includes(event.status)
       if (terminal) { approvalQueue.clear(); renderCurrentApproval(); deltaBatcher.flush(); messageLog.querySelector<HTMLElement>('.agent-message.assistant[data-streaming]')?.removeAttribute('data-streaming') }
-      statusElement.textContent = msg(`dock.status.${event.status}` as 'dock.status.running')
-      dock.setBusy(!terminal)
+      statusElement.textContent = taskMode === 'suggestion' && event.status === 'completed'
+        ? msg('dock.suggestion') : msg(`dock.status.${event.status}` as 'dock.status.running')
+      dock.setBusy(activeTaskId !== null)
       dock.waitingApproval(event.status === 'waiting-approval')
-      if (terminal) activeTaskId = null
     }
   }
   const captureSelection = async (): Promise<void> => {
@@ -241,7 +296,7 @@ export function createAgentDockApp(input: {
       onNew: () => { sessions.selectSession(null); closeMenus(); refreshHeader(); void loadHistory(null); dock.focusInput() },
       onSelect: (id) => { sessions.selectSession(id); closeMenus(); refreshHeader(); void loadHistory(id); dock.focusInput() },
       onRename: async (id, title) => { await sessions.rename(id, title); closeMenus(); refreshHeader() },
-      onDelete: (id) => { pendingDeleteSessionId = id; closeMenus(); deleteDialog.showModal(); deleteCancel.focus() },
+      onDelete: (id) => { pendingDeleteSessionId = id; deleteError.hidden = true; closeMenus(); deleteDialog.showModal(); deleteCancel.focus() },
     })
     modelMenu.hidden = true
     sessionMenu.hidden = false
@@ -249,6 +304,7 @@ export function createAgentDockApp(input: {
     modelButton.setAttribute('aria-expanded', 'false')
   }
   const openModelMenu = (): void => {
+    if (starting || activeTaskId) return
     const state = sessions.state()
     renderModelMenu({
       container: modelMenu, providers: state.providers, currentId: state.providerId,
@@ -271,11 +327,18 @@ export function createAgentDockApp(input: {
   const modelClick = (): void => { modelMenu.hidden ? openModelMenu() : closeMenus() }
   const sessionClick = (): void => { sessionMenu.hidden ? openSessionMenu() : closeMenus() }
   const cancelDelete = (): void => { pendingDeleteSessionId = null; deleteDialog.close() }
+  const deleteError = required<HTMLElement>('agent-session-delete-error')
   const confirmDelete = (): void => {
     const id = pendingDeleteSessionId
-    pendingDeleteSessionId = null
     if (!id) { deleteDialog.close(); return }
-    void sessions.delete(id).then(() => { deleteDialog.close(); refreshHeader(); void loadHistory(sessions.state().currentSessionId); openSessionMenu() })
+    deleteConfirm.disabled = true
+    void sessions.delete(id).then((deleted) => {
+      if (!deleted) { deleteError.textContent = msg('dock.sessionActive'); deleteError.hidden = false; return }
+      pendingDeleteSessionId = null
+      deleteDialog.close(); refreshHeader(); void loadHistory(sessions.state().currentSessionId); openSessionMenu()
+    }).catch(() => {
+      deleteError.textContent = msg('dock.deleteSessionFailed'); deleteError.hidden = false
+    }).finally(() => { deleteConfirm.disabled = false })
   }
   document.addEventListener('keydown', selectionShortcut)
   document.addEventListener('pointerdown', outsideMenus)

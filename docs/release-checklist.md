@@ -1,5 +1,7 @@
 # DraftMD Release Checklist
 
+The report below records the 2026-09-02 candidate and its original release policy. For the current source tree and remaining validation, see the [current roadmap](roadmap.md). The [0.1.0 release](releases/v0.1.0.md) uses the subsequently authorized unsigned GitHub distribution policy. Historical artifact hashes and validation claims here do not describe that release.
+
 Use this checklist for a release candidate. Do not publish, tag, sign, notarize, or run paid-provider checks without the required authorization.
 
 ## RC verification report — 2026-09-02

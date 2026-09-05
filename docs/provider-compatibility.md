@@ -12,6 +12,8 @@ DraftMD supports model services through the official Anthropic and OpenAI SDKs p
 
 DraftMD runs a capability test before labeling a configuration. A provider may be marked **Agent**, **Chat only**, or **Unavailable**. Chat-only providers receive no file tools and cannot modify Markdown. Text that resembles a tool call remains ordinary assistant text.
 
+In the current source tree, changing the provider kind, preset, endpoint, model, transport settings, or credential references clears the previous capability and test metadata. Run the capability test again before using that configuration. Renaming a configuration or changing the default does not invalidate its result. A probe result is discarded if the configuration was deleted or its saved connection no longer matches the tested connection. Concurrent probes for the same connection retain completion-order semantics.
+
 Compatibility depends on streaming behavior, tool-call argument fidelity, cancellation, and the selected model—not only on accepting an OpenAI-shaped request. Custom endpoints must be tested individually. Public plain-HTTP endpoints require explicit approval; loopback local HTTP endpoints are allowed for local services.
 
 Release-candidate validation includes Ollama and LM Studio plus one real Anthropic and one real OpenAI model. Real-provider checks are manual because they use external services and may incur charges.

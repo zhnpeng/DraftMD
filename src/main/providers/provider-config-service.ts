@@ -3,6 +3,7 @@ import type { CredentialStore } from '../credentials/credential-store'
 import type { ProviderConfigRecord } from '../persistence/provider-config-repository'
 import { uuidv7 } from '../persistence/ids'
 import { validateProviderEndpoint } from './endpoint-policy'
+import { sameProviderConnection } from './provider-connection'
 
 export interface ProviderConfigInput {
   id?: string
@@ -141,6 +142,11 @@ export function createProviderConfigService(deps: ProviderConfigServiceDependenc
         const record: ProviderConfigRecord & { createdAt: string; updatedAt: string } = {
           ...config, isDefault: existing?.isDefault ?? deps.repository.list().length === 0,
           createdAt: timestamp, updatedAt: timestamp,
+        }
+        if (existing && !sameProviderConnection(existing, config)) {
+          record.capability = 'unavailable'
+          record.lastTestedAt = null
+          record.lastTestErrorCode = null
         }
         deps.repository.save(record)
         await Promise.allSettled(replacedRefs.filter((ref) => !createdRefs.includes(ref)).map((ref) => deps.credentials.delete(ref)))

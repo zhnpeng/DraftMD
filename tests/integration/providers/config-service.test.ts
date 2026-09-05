@@ -29,6 +29,59 @@ async function setup(overrides: Record<string, unknown> = {}) {
 }
 
 describe('ProviderConfigService', () => {
+  it.each([
+    { model: 'another-model' }, { baseUrl: 'http://127.0.0.1:1234/v1' },
+    { kind: 'openai' as const }, { preset: 'lm-studio' as const },
+    { timeoutMs: 30_000 }, { streamEnabled: false }, { toolsEnabled: false },
+    { insecureHttpApproved: true },
+  ])('invalidates capability and all probe metadata when connection settings change: %j', async patch => {
+    const { database, repository, service } = await setup()
+    try {
+      const saved = await service.saveConfig(input)
+      repository.updateTestResult(saved.id, { capability: 'agent', testedAt: '2026-09-05T10:00:00Z', testedModel: input.model, latencyMs: 42, errorCode: null }, repository.get(saved.id)!)
+      const updated = await service.saveConfig({ ...input, id: saved.id, ...patch })
+      expect(updated).toMatchObject({ capability: 'unavailable', lastTestedAt: null, lastTestErrorCode: null })
+      expect(repository.get(saved.id)).toMatchObject({ lastTestedModel: null, lastTestLatencyMs: null })
+    } finally { database.close() }
+  })
+
+  it.each([
+    { apiKey: 'replacement' }, { removeApiKey: true },
+    { headers: { token: 'replacement-header' } }, { removeHeaders: ['token'] },
+  ])('invalidates capability when secret references change: %j', async secrets => {
+    const { database, repository, service } = await setup()
+    try {
+      const saved = await service.saveConfig(input, { apiKey: 'old', headers: { token: 'old-header' } })
+      repository.updateTestResult(saved.id, { capability: 'agent', testedAt: '2026-09-05T10:00:00Z', testedModel: input.model, latencyMs: 42, errorCode: null }, repository.get(saved.id)!)
+      await service.saveConfig({ ...input, id: saved.id }, secrets)
+      expect(repository.get(saved.id)).toMatchObject({ capability: 'unavailable', lastTestedAt: null, lastTestedModel: null, lastTestLatencyMs: null })
+    } finally { database.close() }
+  })
+
+  it('preserves capability when only the display name changes or secret fields are blank', async () => {
+    const { database, repository, service } = await setup()
+    try {
+      const saved = await service.saveConfig(input, { apiKey: 'old', headers: { token: 'old-header' } })
+      repository.updateTestResult(saved.id, { capability: 'agent', testedAt: '2026-09-05T10:00:00Z', testedModel: input.model, latencyMs: 42, errorCode: null }, repository.get(saved.id)!)
+      await service.saveConfig({ ...input, id: saved.id, name: 'Renamed' }, { apiKey: '', headers: { token: '' } })
+      expect(repository.get(saved.id)).toMatchObject({ capability: 'agent', lastTestedModel: input.model, lastTestLatencyMs: 42 })
+    } finally { database.close() }
+  })
+
+  it('rejects an in-flight result after editing or deleting its configuration', async () => {
+    const { database, repository, service } = await setup()
+    try {
+      const saved = await service.saveConfig(input)
+      const tested = repository.get(saved.id)!
+      const result = { capability: 'agent' as const, testedAt: '2026-09-05T10:00:00Z', testedModel: input.model, latencyMs: 42, errorCode: null }
+      await service.saveConfig({ ...input, id: saved.id, model: 'new-model' })
+      expect(repository.updateTestResult(saved.id, result, tested)).toBe(false)
+      expect(repository.get(saved.id)).toMatchObject({ model: 'new-model', capability: 'unavailable', lastTestedAt: null })
+      await service.deleteConfig(saved.id, true)
+      expect(repository.updateTestResult(saved.id, result, tested)).toBe(false)
+    } finally { database.close() }
+  })
+
   it('stores non-secret configuration in SQLite and secrets only in the credential store', async () => {
     const { database, credentials, repository, service } = await setup()
     try {

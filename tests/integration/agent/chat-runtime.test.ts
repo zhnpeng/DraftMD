@@ -5,6 +5,34 @@ import { FakeProviderAdapter } from '../../helpers/fake-provider-adapter'
 
 const sessionId = '01991d5a-1c00-7000-8000-000000000001'
 
+it('exposes chat deltas before completion, cancels its provider, and persists partial text once', async () => {
+  let providerSignal!: AbortSignal
+  const messages = { create: vi.fn() }
+  const runtime = new ChatRuntime({
+    messages,
+    provider: { async *stream(request, signal) {
+      expect(request.tools).toEqual([])
+      providerSignal = signal
+      yield { type: 'text-delta', text: 'Partial suggestion' } as const
+      await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }))
+      throw Object.assign(new Error('cancelled'), { code: 'CANCELLED' })
+    } },
+  })
+  const handle = runtime.start({ taskId: '01991d5a-1c00-7000-8000-000000000002', sessionId, prompt: 'Help', currentDocument: '# Draft', selection: null })
+  const events: any[] = []
+  for await (const event of handle.events) {
+    events.push(event)
+    if (event.type === 'assistant-text-delta') handle.stop()
+  }
+  expect(providerSignal.aborted).toBe(true)
+  expect(events).toContainEqual(expect.objectContaining({ type: 'assistant-text-delta', text: 'Partial suggestion' }))
+  expect(events.at(-1)).toMatchObject({ type: 'status', status: 'stopped' })
+  await expect(handle.done).resolves.toMatchObject({ status: 'stopped', changeSet: null })
+  const assistant = messages.create.mock.calls.map(([message]) => message).filter(message => message.role === 'assistant')
+  expect(assistant).toHaveLength(1)
+  expect(assistant[0].content).toEqual([{ type: 'text', text: 'Partial suggestion' }])
+})
+
 it('streams and persists chat with zero tools and no task baseline', async () => {
   const adapter = new FakeProviderAdapter([() => [
     { type: 'text-delta', text: 'Suggestion' },

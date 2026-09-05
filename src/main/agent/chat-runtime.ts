@@ -1,6 +1,9 @@
 import type { NormalizedStopReason, ProviderRequest } from '../../shared/contracts/provider'
 import type { ProviderAdapter } from '../providers/provider-adapter'
 import { uuidv7 } from '../persistence/ids'
+import type { TaskEvent } from '../../shared/contracts/agent'
+import type { TaskHandle } from './runtime-registry'
+import { AsyncEventQueue } from './async-event-queue'
 
 export interface ChatInput {
   sessionId: string
@@ -17,7 +20,32 @@ export class ChatRuntime {
     now?: () => number
   }) {}
 
-  async run(input: ChatInput): Promise<{ text: string; stopReason: NormalizedStopReason }> {
+  start(input: Omit<ChatInput, 'signal'> & { taskId: string }): TaskHandle {
+    const events = new AsyncEventQueue<TaskEvent>()
+    const controller = new AbortController()
+    let sequence = 0
+    const emit = (event: { type: 'status'; status: 'running' | 'completed' | 'stopped' | 'failed' } | { type: 'assistant-text-delta'; text: string }): void => {
+      events.push({ ...event, taskId: input.taskId, sequence: sequence++ })
+    }
+    emit({ type: 'status', status: 'running' })
+    const done = this.run({ ...input, signal: controller.signal }, text => emit({ type: 'assistant-text-delta', text }))
+      .then(() => {
+        const status = controller.signal.aborted ? 'stopped' as const : 'completed' as const
+        emit({ type: 'status', status })
+        return { status, changeSet: null, errorCode: null }
+      }, (error: unknown) => {
+        const status = controller.signal.aborted ? 'stopped' as const : 'failed' as const
+        const code = (error as { code?: unknown })?.code
+        const errorCode = controller.signal.aborted ? 'CANCELLED'
+          : typeof code === 'string' && /^[A-Z0-9_]{1,128}$/.test(code) ? code : 'PROVIDER_ERROR'
+        events.push({ taskId: input.taskId, sequence: sequence++, type: 'error', code: errorCode, retryable: false })
+        emit({ type: 'status', status })
+        return { status, changeSet: null, errorCode }
+      }).finally(() => events.close())
+    return { events, done, stop: () => controller.abort(), respondToApproval: () => false }
+  }
+
+  async run(input: ChatInput, onText: (text: string) => void = () => {}): Promise<{ text: string; stopReason: NormalizedStopReason }> {
     const now = this.deps.now ?? Date.now
     const context = {
       instruction: 'This provider is chat-only. Give a suggestion; do not claim to modify files.',
@@ -37,15 +65,25 @@ export class ChatRuntime {
     })
     let text = ''
     let finalText = ''
+    let providerData: unknown = null
     let stopReason: NormalizedStopReason = 'unknown'
-    for await (const event of this.deps.provider.stream(request, input.signal)) {
-      if (event.type === 'text-delta') text += event.text
-      else if (event.type === 'completed') {
-        finalText = event.assistantMessage.content.filter((block) => block.type === 'text').map((block) => block.text).join('')
-        stopReason = event.stopReason
+    try {
+      input.signal.throwIfAborted()
+      for await (const event of this.deps.provider.stream(request, input.signal)) {
+        input.signal.throwIfAborted()
+        if (event.type === 'text-delta') { text += event.text; onText(event.text) }
+        else if (event.type === 'completed') {
+          finalText = event.assistantMessage.content.filter((block) => block.type === 'text').map((block) => block.text).join('')
+          if (finalText.startsWith(text) && finalText.length > text.length) onText(finalText.slice(text.length))
+          stopReason = event.stopReason
+          providerData = event.assistantMessage.providerData
+        }
+      }
+    } finally {
+      if (finalText || text) {
         this.deps.messages.create({
           id: uuidv7(now()), sessionId: input.sessionId, role: 'assistant',
-          content: [{ type: 'text', text: finalText || text }], modelSwitch: event.assistantMessage.providerData,
+          content: [{ type: 'text', text: finalText || text }], modelSwitch: providerData,
           createdAt: new Date(now()).toISOString(),
         })
       }

@@ -24,15 +24,15 @@ it('runs every release gate in order before packaging', () => {
   expect(workflow.indexOf('npm run dist:mac', cursor)).toBeGreaterThan(cursor)
 })
 
-it('fails closed for signed tags and never publishes workflow-dispatch builds', () => {
+it('builds unsigned releases without Apple credentials and publishes only tags', () => {
   const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
   for (const secret of ['CSC_LINK', 'CSC_KEY_PASSWORD', 'APPLE_ID', 'APPLE_APP_SPECIFIC_PASSWORD', 'APPLE_TEAM_ID']) {
-    expect(workflow).toContain(secret)
+    expect(workflow).not.toContain(`secrets.${secret}`)
   }
-  expect(workflow).toContain('npm run dist:mac:signed')
+  expect(workflow).not.toContain('npm run dist:mac:signed')
   expect(workflow).toContain('CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist:mac')
   expect(workflow).toMatch(/release:\n\s+if: startsWith\(github\.ref, 'refs\/tags\/v'\)/)
-  expect(workflow).toContain("github.event_name == 'workflow_dispatch'")
+  expect(workflow).toContain('name: draftmd-macos-universal-unsigned')
 })
 
 it('links release, privacy, and provider compatibility documentation', () => {
@@ -50,21 +50,18 @@ it('ships upstream license and attribution with packaged applications', () => {
   expect(builder).toContain('Copyright © 2026 marswave.ai and DraftMD contributors')
 })
 
-it('publishes hyphenated version tags only as unsigned prereleases', () => {
+it('distinguishes prereleases from regular releases independently of signing', () => {
   const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
-  const stableTag = "startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-')"
-  const previewTag = "startsWith(github.ref, 'refs/tags/v') && contains(github.ref_name, '-')"
-  expect(workflow).toContain(`if: ${stableTag}`)
-  expect(workflow).toContain(`if: github.event_name == 'workflow_dispatch' || (${previewTag})`)
   expect(workflow).toContain("prerelease: ${{ contains(github.ref_name, '-') }}")
 })
 
-it('uses reviewed release notes that warn unsigned preview users', () => {
+it('uses reviewed release notes that explain unsigned installation', () => {
   const workflow = readFileSync('.github/workflows/release.yml', 'utf8')
-  const notesPath = 'docs/releases/v0.1.0-preview.5.md'
+  const { version } = JSON.parse(readFileSync('package.json', 'utf8'))
+  const notesPath = `docs/releases/v${version}.md`
   expect(workflow).toContain('body_path: docs/releases/${{ github.ref_name }}.md')
   const notes = readFileSync(notesPath, 'utf8')
-  expect(notes).toContain('Unsigned macOS preview')
+  expect(notes).toContain('Unsigned macOS')
   expect(notes).toContain('not notarized')
   expect(notes).toContain('Control-click')
 })

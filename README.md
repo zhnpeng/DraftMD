@@ -4,21 +4,34 @@
 
 **Language / 语言: [English](README.md) · [中文](README_CN.md)**
 
-DraftMD is a focused Markdown editor for people working alongside AI agents. When an external tool updates an open `.md` file, DraftMD reflects the change in real time while protecting unsaved local edits.
+DraftMD combines a visual Markdown editor with an AI agent that works inside a folder you choose. Configure a model service, ask it to read or update your documents, inspect the changes, and undo a task when needed. External file changes also appear in real time while unsaved local edits are protected.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Features
 
+- **Built-in Agent & Chat**: Stream replies, follow tool activity, approve file deletion, and stop a running task. Providers are tested and labeled Agent, Chat only, or Unavailable.
+- **Reviewable Changes**: Inspect per-task file changes and Diff, undo with conflict checks, and recover interrupted tasks.
+- **Local Conversations**: Workspace-scoped session history, document and selection context, and credentials stored in macOS Keychain.
 - **Live Agent Sync** — External changes appear in the editor in real time.
 - **True WYSIWYG Editing** — Edit Markdown as rich text without a split preview.
-- **Files & Outline** — Browse nearby Markdown files or navigate document headings.
+- **Files & Outline**: Open a folder as a workspace, browse its Markdown files, or navigate document headings.
 - **Source Mode** — Switch to raw Markdown whenever precise source editing is useful.
 - **Markdown Essentials** — Task lists, highlights, KaTeX formulas, Mermaid diagrams, search, and smart line breaks.
 - **Built-in Themes** — Choose from twelve bundled light and dark themes.
 - **PDF & HTML Export** — Export the current document with its active presentation.
-- **Universal macOS App** — One build supports Apple silicon and Intel Macs on macOS 13 or later.
+- **Universal macOS App**: Packages target Apple silicon and Intel on macOS 13 or later. Physical Intel and macOS 13 runtime validation remain release checks.
 - **Minimal by Design** — No permanent toolbar or status bar.
+
+## Getting Started
+
+1. Install the [latest release](https://github.com/zhnpeng/DraftMD/releases/latest). Read the [0.1.0 installation notes](docs/releases/v0.1.0.md) for its unsigned-build limitations.
+2. Open a folder containing your Markdown documents.
+3. Configure a provider and run its capability test. See [provider compatibility](docs/provider-compatibility.md).
+4. Start a conversation in the Agent Dock. Agent-capable configurations can use workspace file tools; Chat only configurations provide text suggestions.
+5. Review changes and any deletion approval, then keep the result or use Undo.
+
+This README describes the current source tree. The [0.1.0 release notes](docs/releases/v0.1.0.md) describe the release, and the [roadmap](docs/roadmap.md) lists outstanding validation. See [privacy](docs/privacy.md) for local storage, snapshot retention, and what is sent to providers.
 
 ## Development
 
@@ -34,6 +47,10 @@ Quality gates:
 ```bash
 npm run test
 npm run typecheck
+npm run test:integration
+npm run test:security
+npm run test:e2e
+npm run test:performance
 npm run build
 npm run check:theme-colors
 ```
@@ -44,10 +61,12 @@ Build the Universal macOS distributables:
 npm run dist:mac
 ```
 
-Signing and notarization require the Apple credentials referenced by the release workflow. Local builds are unsigned.
+GitHub Releases and local builds are currently unsigned and not notarized. The optional `npm run dist:mac:signed` command requires Apple Developer ID and notarization credentials; signing is independent of GitHub release status.
 
 ## Documentation
 
+- [Current status and roadmap](docs/roadmap.md)
+- [Feature candidates and deferred scope](docs/feature-requests.md)
 - [Release checklist](docs/release-checklist.md)
 - [Privacy](docs/privacy.md)
 - [Provider compatibility](docs/provider-compatibility.md)

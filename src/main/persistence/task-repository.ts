@@ -23,6 +23,7 @@ export function createTaskRepository(database: Database.Database) {
   const create = database.prepare(`insert into tasks (id, session_id, status, created_at, updated_at)
     values (@id, @sessionId, @status, @createdAt, @updatedAt)`)
   const get = database.prepare('select * from tasks where id = ?')
+  const listIds = database.prepare('select id from tasks')
   const latestForSession = database.prepare('select * from tasks where session_id = ? order by created_at desc, id desc limit 1')
   const listInterrupted = database.prepare("select * from tasks where status in ('preparing', 'running', 'waiting-approval') order by created_at")
   const listInterruptedContexts = database.prepare(`select
@@ -33,6 +34,7 @@ export function createTaskRepository(database: Database.Database) {
   const transition = database.prepare('update tasks set status = ?, updated_at = ? where id = ? and status = ?')
   return {
     create(record: TaskRecord): void { create.run(record) },
+    listIds(): string[] { return (listIds.all() as Array<{ id: string }>).map(row => row.id) },
     get(id: string): TaskRecord | null {
       const row = get.get(id) as TaskRow | undefined
       return row ? fromRow(row) : null

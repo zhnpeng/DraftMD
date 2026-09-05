@@ -1,5 +1,33 @@
-import { expect, it } from 'vitest'
-import { resolveTestLaunchDocument } from '../../helpers/electron-app'
+import { expect, it, vi } from 'vitest'
+import { tmpdir } from 'node:os'
+import { mkdtemp, rm, symlink } from 'node:fs/promises'
+import { join } from 'node:path'
+import { launchDraftMD, resolveTestApplication, resolveTestLaunchDocument } from '../../helpers/electron-app'
+
+it.each([process.cwd(), tmpdir()])('rejects unsafe test user data before prepare or launch: %s', async userDataPath => {
+  const prepare = vi.fn(async () => { throw new Error('prepare must not run') })
+  await expect(launchDraftMD({ userDataPath, prepare })).rejects.toThrow(/canonical temp root/)
+  expect(prepare).not.toHaveBeenCalled()
+})
+
+it('rejects a temporary symlink that leads to a non-temporary profile', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'draftmd-profile-link-'))
+  try {
+    const userDataPath = join(root, 'linked-profile')
+    await symlink(process.cwd(), userDataPath)
+    const prepare = vi.fn(async () => { throw new Error('prepare must not run') })
+    await expect(launchDraftMD({ userDataPath, prepare })).rejects.toThrow(/canonical temp root/)
+    expect(prepare).not.toHaveBeenCalled()
+  } finally { await rm(root, { recursive: true, force: true }) }
+})
+
+it('launches a packaged app using its executable and an isolated Chromium profile', () => {
+  expect(resolveTestApplication('/private/tmp/profile', '/release/current/DraftMD.app')).toEqual({
+    executablePath: '/release/current/DraftMD.app/Contents/MacOS/DraftMD',
+    args: ['--user-data-dir=/private/tmp/profile'],
+  })
+  expect(() => resolveTestApplication('/private/tmp/profile', '/release/index.js')).toThrow(/\.app/)
+})
 
 it('accepts one Markdown launch path inside the canonical temp root', () => {
   expect(resolveTestLaunchDocument('/private/tmp/app', {

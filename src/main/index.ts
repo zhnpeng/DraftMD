@@ -23,6 +23,7 @@ import { createMessageRepository } from './persistence/message-repository'
 import { createSessionRepository } from './persistence/session-repository'
 import { createWorkspaceRepository } from './persistence/workspace-repository'
 import { createTaskRepository } from './persistence/task-repository'
+import { cleanupSnapshotsAfterRecovery } from './changes/snapshot-retention'
 import { createProviderConfigRepository } from './persistence/provider-config-repository'
 import { createRuntimeCredentialStore } from './credentials/runtime-credential-store'
 import { createProviderConfigService } from './providers/provider-config-service'
@@ -37,6 +38,7 @@ import { createAgentAppService } from './agent/agent-app-service'
 import { createTaskActionService } from './agent/task-actions'
 import { AgentRuntime } from './agent/agent-runtime'
 import { ChatRuntime } from './agent/chat-runtime'
+import { buildSessionHistory } from './agent/session-history'
 import { createToolExecutor } from './agent/tools/executor'
 import { buildProviderRequest } from './agent/context-builder'
 import { normalizeSelectionReference } from './agent/selection-reference'
@@ -130,10 +132,10 @@ const providerConfigService = createProviderConfigService({
 const capabilityTester = createCapabilityTester({
   materialize: providerConfigService.materialize,
   createAdapter: createProviderAdapter,
-  persist: (id, result) => providerConfigRepository.updateTestResult(id, {
+  persist: (id, result, expected) => providerConfigRepository.updateTestResult(id, {
     capability: result.capability, testedAt: result.testedAt, testedModel: result.model,
     latencyMs: result.latencyMs, errorCode: result.errorCode,
-  }),
+  }, expected),
   nonce: randomUUID,
   now: Date.now,
 })
@@ -165,7 +167,8 @@ windowManager = createWindowManager({
   documentService, snapshotLoader: documentService, watchService, recentStore, locale, appVersion: () => app.getVersion(),
   databaseWarning: () => persistence.warning?.code ?? null,
   preloadPath: join(__dirname, '../preload/index.js'), rendererPath: join(__dirname, '../renderer/index.html'),
-  rendererURL: process.env.ELECTRON_RENDERER_URL, readdir, stat, rebuildMenu: () => rebuildMenu(),
+  rendererURL: app.isPackaged ? undefined : process.env.ELECTRON_RENDERER_URL,
+  readdir, stat, rebuildMenu: () => rebuildMenu(),
   addRecentDocument: (path) => app.addRecentDocument(path), platform: process.platform,
   onStartupMark: markStartup, onWindowClosed: (win) => runtimeRegistry?.closeWindow(win), onRendererReady: () => { markStartup('renderer-ready'); writeStartupTrace() },
 })
@@ -194,15 +197,21 @@ const agentSessionService = createAgentAppService({
       root: input.workspace.root,
       workspace: workspaceService,
     }) : null
+    const liveMessages = buildSessionHistory({ messages: messageRepository.list(input.session.id), task: null, activities: [] }).messages
+    liveMessages.push({ role: 'user', text: input.prompt })
+    const ensureWindow = (): void => {
+      if (win.isDestroyed() || win.webContents.isDestroyed()) throw Object.assign(new Error('Window closed'), { code: 'CANCELLED' })
+    }
     if (materialized.config.capability === 'chat-only') {
       const chat = new ChatRuntime({ provider, messages: messageRepository })
-      const controller = new AbortController()
-      const result = await chat.run({
-        sessionId: input.session.id, prompt: input.prompt,
+      const taskId = uuidv7()
+      ensureWindow()
+      const handle = chat.start({
+        taskId, sessionId: input.session.id, prompt: input.prompt,
         currentDocument: input.currentContent, selection: selection?.selectedText ?? null,
-        signal: controller.signal,
       })
-      return { mode: 'suggestion', taskId: null, suggestion: result.text }
+      runtimeRegistry.register(taskId, win, handle, { sessionId: input.session.id, mode: 'suggestion', messages: liveMessages })
+      return { mode: 'suggestion', taskId, suggestion: null }
     }
     const executor = createToolExecutor({ workspace: workspaceService, approval: approvalBroker })
     const runtime = new AgentRuntime({
@@ -237,11 +246,12 @@ const agentSessionService = createAgentAppService({
       },
       tools: toolDefinitions,
     })
+    ensureWindow()
     const handle = runtime.start({ taskId, sessionId: input.session.id, workspace: {
       id: input.workspace.descriptor.id, name: input.workspace.descriptor.name,
       canonicalPath: input.workspace.root.canonicalPath,
     }, request })
-    runtimeRegistry.register(taskId, win, handle)
+    runtimeRegistry.register(taskId, win, handle, { sessionId: input.session.id, mode: 'agent', messages: liveMessages })
     return { mode: 'agent', taskId, suggestion: null }
   },
 })
@@ -322,7 +332,14 @@ registerIpcHandlers({
 let pendingFilePaths: string[] = []
 let isQuitting = false
 app.whenReady().then(() => {
-  markStartup('app-ready'); rebuildMenu(); void loadSystemFonts(); recoveryReady = recovery.recover().catch(() => [])
+  markStartup('app-ready'); rebuildMenu(); void loadSystemFonts()
+  const recoveringTasks = recovery.recover()
+  recoveryReady = recoveringTasks.catch(() => [])
+  void cleanupSnapshotsAfterRecovery({
+    userDataPath: app.getPath('userData'), tasks: taskRepository,
+    recovery: recoveringTasks, databaseWarning: persistence.warning,
+    log: entry => safeLogger.write(entry),
+  })
   const appEntryIndex = app.isPackaged ? 0 : process.argv.findIndex((arg) => arg.endsWith('/dist/main/index.js'))
   const args = process.argv.slice(appEntryIndex >= 0 ? appEntryIndex + 1 : app.isPackaged ? 1 : 2)
     .filter((arg) => !arg.startsWith('-'))

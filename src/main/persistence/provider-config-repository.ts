@@ -1,5 +1,14 @@
 import type Database from 'better-sqlite3'
 import { ProviderConfigSchema, type ProviderConfig } from '../../shared/contracts/provider'
+import { sameProviderConnection } from '../providers/provider-connection'
+
+interface CapabilityTestRecord {
+  capability: ProviderConfig['capability']
+  testedAt: string
+  testedModel: string
+  latencyMs: number
+  errorCode: ProviderConfig['lastTestErrorCode']
+}
 
 export interface ProviderConfigRecord extends ProviderConfig {
   isDefault: boolean
@@ -44,7 +53,9 @@ export function createProviderConfigRepository(database: Database.Database) {
     header_credential_refs_json=excluded.header_credential_refs_json, timeout_ms=excluded.timeout_ms,
     stream_enabled=excluded.stream_enabled, tools_enabled=excluded.tools_enabled,
     insecure_http_approved=excluded.insecure_http_approved, capability=excluded.capability,
-    last_tested_at=excluded.last_tested_at, last_test_error_code=excluded.last_test_error_code`)
+    last_tested_at=excluded.last_tested_at, last_test_error_code=excluded.last_test_error_code,
+    last_tested_model=case when excluded.last_tested_at is null then null else provider_configs.last_tested_model end,
+    last_test_latency_ms=case when excluded.last_tested_at is null then null else provider_configs.last_test_latency_ms end`)
   const get = database.prepare('select * from provider_configs where id = ?')
   const list = database.prepare('select * from provider_configs order by is_default desc, updated_at desc, id')
   const remove = database.prepare('delete from provider_configs where id = ?')
@@ -57,6 +68,11 @@ export function createProviderConfigRepository(database: Database.Database) {
   const setDefaultTransaction = database.transaction((id: string) => {
     clearDefault.run()
     if (setDefault.run(id).changes !== 1) throw Object.assign(new Error('Provider config not found'), { code: 'CONFIG_NOT_FOUND' })
+  })
+  const updateTestTransaction = database.transaction((id: string, result: CapabilityTestRecord, expected: ProviderConfig): boolean => {
+    const row = get.get(id) as ProviderRow | undefined
+    if (!row || !sameProviderConnection(fromRow(row), expected)) return false
+    return updateTest.run({ id, ...result }).changes === 1
   })
   return {
     save(record: ProviderConfigRecord & { createdAt: string; updatedAt: string }): void {
@@ -74,8 +90,8 @@ export function createProviderConfigRepository(database: Database.Database) {
     list(): ProviderConfigRecord[] { return (list.all() as ProviderRow[]).map(fromRow) },
     delete(id: string): boolean { return remove.run(id).changes === 1 },
     setDefault(id: string): void { setDefaultTransaction(id) },
-    updateTestResult(id: string, result: { capability: ProviderConfig['capability']; testedAt: string; testedModel: string; latencyMs: number; errorCode: ProviderConfig['lastTestErrorCode'] }): void {
-      if (updateTest.run({ id, ...result }).changes !== 1) throw Object.assign(new Error('Provider config not found'), { code: 'CONFIG_NOT_FOUND' })
+    updateTestResult(id: string, result: CapabilityTestRecord, expected: ProviderConfig): boolean {
+      return updateTestTransaction(id, result, expected)
     },
   }
 }

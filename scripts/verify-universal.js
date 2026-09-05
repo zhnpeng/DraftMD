@@ -26,14 +26,14 @@ function symlinks(root) {
   return found
 }
 
-function verifyUniversal(root = process.cwd()) {
+function verifyUniversal(root = process.cwd(), outputDirectory = join(root, 'release')) {
   const version = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version
-  const app = join(root, 'release/mac-universal/DraftMD.app')
+  const app = join(outputDirectory, 'mac-universal/DraftMD.app')
   const executable = join(app, 'Contents/MacOS/DraftMD')
   for (const path of [
     app,
-    join(root, `release/DraftMD-${version}-universal.dmg`),
-    join(root, `release/DraftMD-${version}-universal-mac.zip`),
+    join(outputDirectory, `DraftMD-${version}-universal.dmg`),
+    join(outputDirectory, `DraftMD-${version}-universal-mac.zip`),
   ]) if (!existsSync(path)) throw new Error(`Missing Universal artifact: ${path}`)
   const appArchitectures = architectures(executable).sort()
   if (appArchitectures.join(' ') !== 'arm64 x64') throw new Error(`Universal executable has wrong architectures: ${appArchitectures.join(' ')}`)
@@ -74,6 +74,6 @@ function verifyUniversal(root = process.cwd()) {
 module.exports = { normalizeArchitectures, architectures, symlinks, verifyUniversal }
 
 if (require.main === module) {
-  const result = verifyUniversal()
-  console.log(`Verified unsigned Universal candidate: ${result.app}`)
+  const result = verifyUniversal(process.cwd(), process.env.DRAFTMD_ARTIFACTS_DIR || join(process.cwd(), 'release'))
+  console.log(`Verified Universal candidate: ${result.app}`)
 }

@@ -74,6 +74,38 @@ it('rejects rename and delete for a session outside the active workspace', () =>
   expect(() => test.service.deleteSession({ id: 1 } as never, 'session')).toThrowError(expect.objectContaining({ code: 'SESSION_NOT_FOUND' }))
 })
 
+it.each(['preparing', 'running', 'waiting-approval'])('does not delete a session with a %s task', (status) => {
+  const test = setup()
+  test.sessions.get.mockReturnValue({ id: 'session', workspaceId: test.workspace.descriptor.id })
+  test.tasks.latestForSession.mockReturnValue({ id: 'task', status } as never)
+  expect(test.service.deleteSession({ id: 1 } as never, 'session')).toBe(false)
+  expect(test.sessions.delete).not.toHaveBeenCalled()
+  expect(() => test.service.switchModel({ id: 1 } as never, { sessionId: 'session', providerConfigId: 'other' })).toThrowError(expect.objectContaining({ code: 'TASK_ACTIVE' }))
+})
+
+it('protects a session and window while provider preparation is pending, then releases a failed start', async () => {
+  let rejectStart!: (error: Error) => void
+  const workspaceId = 'a'.repeat(64)
+  const session = { id: 'session', workspaceId }
+  const remove = vi.fn(() => true)
+  const startTask = vi.fn(() => new Promise<never>((_resolve, reject) => { rejectStart = reject }))
+  const service = createAgentAppService({
+    workspaceManager: { current: () => ({ descriptor: { id: workspaceId }, root: {} }) },
+    sessions: { get: () => session, delete: remove },
+    messages: { latestModelSwitch: () => 'provider' }, tasks: { latestForSession: () => null },
+    runtimeRegistry: {}, startTask,
+  } as never)
+  const input = { workspaceId, sessionId: session.id, providerConfigId: 'provider', prompt: 'Hello', currentPath: null, currentContent: null, selection: null }
+  const starting = service.start({ id: 1 } as never, input)
+  expect(service.deleteSession({ id: 1 } as never, session.id)).toBe(false)
+  await expect(service.start({ id: 1 } as never, input)).rejects.toMatchObject({ code: 'TASK_ACTIVE' })
+  await expect(service.start({ id: 2 } as never, input)).rejects.toMatchObject({ code: 'TASK_ACTIVE' })
+  expect(startTask).toHaveBeenCalledOnce()
+  rejectStart(new Error('Provider unavailable'))
+  await expect(starting).rejects.toThrow('Provider unavailable')
+  expect(service.deleteSession({ id: 1 } as never, session.id)).toBe(true)
+})
+
 it('auto-creates a first session and delegates one authorized task start', async () => {
   const workspace = { descriptor: { id: 'a'.repeat(64), name: 'Project' }, root: { canonicalPath: '/work/project', device: 1, inode: 1 } }
   const sessions = { list: vi.fn(() => []), get: vi.fn(), create: vi.fn(), rename: vi.fn(), delete: vi.fn() }

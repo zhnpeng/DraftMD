@@ -50,12 +50,13 @@ export function createAgentDockController(input: {
     input.expanded.hidden = !state.expanded
     input.resize.hidden = !state.expanded
     input.stopButton.hidden = !state.busy
+    input.sendButton.disabled = state.busy
     document.documentElement.style.setProperty('--agent-dock-height', `${state.height}px`)
   }
   const open = (): void => { state.open(); render() }
   const collapse = (): boolean => { const collapsed = state.collapse({ input: input.textarea.value, waitingApproval: waiting }); render(); return collapsed }
   const focusInput = (): void => { open(); input.textarea.focus() }
-  const send = (): void => { const text = input.textarea.value.trim(); if (!text) return; input.onSend(text); input.textarea.value = ''; open() }
+  const send = (): void => { const text = input.textarea.value.trim(); if (!text || state.busy) return; input.onSend(text); input.textarea.value = ''; open() }
   const keydown = (event: KeyboardEvent): void => {
     if (event.key === 'Escape' && document.activeElement === input.textarea && collapse()) { event.preventDefault(); return }
     if (event.key === 'Enter' && event.metaKey && document.activeElement === input.textarea) { event.preventDefault(); send(); return }

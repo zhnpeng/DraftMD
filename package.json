@@ -1,7 +1,7 @@
 {
   "name": "draftmd",
   "productName": "DraftMD",
-  "version": "0.1.0-preview.5",
+  "version": "0.1.0",
   "description": "The open-source macOS AI Markdown editor",
   "main": "dist/main/index.js",
   "license": "MIT",
@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:e2e": "playwright test",
+    "test:packaged": "playwright test --config playwright.packaged.config.ts",
     "check:theme-colors": "node scripts/check-theme-colors.mjs",
     "dist:mac": "electron-vite build && npm run prepare:native-packages && cd .build/package && ../../node_modules/.bin/electron-builder --config electron-builder.yml --config.mac.identity=null --config.mac.notarize=false --mac --universal --publish never",
     "postinstall": "electron-builder install-app-deps",

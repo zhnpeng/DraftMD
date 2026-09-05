@@ -65,6 +65,11 @@ export type TaskEvent = z.infer<typeof TaskEventSchema>
 
 
 export const SessionHistorySchema = z.object({
+  liveTask: z.object({
+    taskId: UUIDv7Schema,
+    mode: z.enum(['agent', 'suggestion']),
+    events: z.array(TaskEventSchema).max(100_000),
+  }).strict().optional(),
   messages: z.array(z.discriminatedUnion('role', [
     z.object({ role: z.enum(['user', 'assistant']), text: z.string().max(5 * 1024 * 1024) }).strict(),
     z.object({ role: z.literal('model-switch'), providerConfigId: UUIDv7Schema }).strict(),

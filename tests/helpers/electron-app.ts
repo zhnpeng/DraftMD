@@ -2,10 +2,21 @@ import { _electron as electron, type ElectronApplication, type Page } from 'play
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const projectRoot = process.cwd()
 const mainEntry = join(projectRoot, 'dist/main/index.js')
 
+export function resolveTestApplication(userDataPath: string, packagedApp?: string): { executablePath: string; args: string[] } {
+  if (packagedApp) {
+    if (!packagedApp.endsWith('.app')) throw new Error('DRAFTMD_PACKAGED_APP must point to a .app bundle')
+    return {
+      executablePath: join(resolve(packagedApp), 'Contents/MacOS/DraftMD'),
+      args: [`--user-data-dir=${userDataPath}`],
+    }
+  }
+  return { executablePath: require('electron') as string, args: [mainEntry] }
+}
 
 
 export async function findMatchingWindow<PageType>(
@@ -85,29 +96,48 @@ export async function launchDraftMD(options: LaunchDraftMDOptions = {}): Promise
   let cleaned = false
 
   try {
+    const insideTemp = relative(await realpath(tmpdir()), userDataPath)
+    if (!insideTemp || insideTemp === '..' || insideTemp.startsWith(`..${sep}`) || isAbsolute(insideTemp)) {
+      throw new Error('Test user data must be contained by the canonical temp root')
+    }
     await options.prepare?.(userDataPath)
     if (options.locale) {
       const { writeFile } = await import('node:fs/promises')
       await writeFile(join(userDataPath, 'settings.json'), JSON.stringify({ locale: options.locale }))
     }
-    const args = [mainEntry]
+    const packagedApp = process.env.DRAFTMD_PACKAGED_APP ? await realpath(process.env.DRAFTMD_PACKAGED_APP) : undefined
+    const { executablePath, args } = resolveTestApplication(userDataPath, packagedApp)
     const launchDocument = resolveTestLaunchDocument(userDataPath, {
       documentName: options.documentName, documentPath: options.documentPath, tempRoot: tmpdir(),
     })
     if (launchDocument) args.push(launchDocument)
+    const env = Object.fromEntries(Object.entries({
+      ...process.env,
+      DRAFTMD_TEST_USER_DATA: userDataPath,
+      NODE_ENV: 'test',
+      ...options.env,
+    }).filter((entry): entry is [string, string] => entry[1] !== undefined))
+    if (packagedApp) delete env.ELECTRON_RENDERER_URL
     app = await electron.launch({
-      executablePath: require('electron') as string,
+      executablePath,
       args,
       cwd: projectRoot,
-      env: {
-        ...process.env,
-        DRAFTMD_TEST_USER_DATA: userDataPath,
-        NODE_ENV: 'test',
-        ...options.env,
-      },
+      env,
     })
+    const launched = await app.evaluate(({ app: electronApp }) => ({
+      isPackaged: electronApp.isPackaged, userData: electronApp.getPath('userData'),
+    }))
+    if (launched.isPackaged !== Boolean(packagedApp) || await realpath(launched.userData) !== userDataPath) {
+      throw new Error('Test application did not launch in the expected mode and isolated user data directory')
+    }
     const windowMatching = async (predicate: (page: Page) => boolean | Promise<boolean>): Promise<Page> => {
       const page = await findMatchingWindow(() => app!.windows(), predicate)
+      if (packagedApp) {
+        const insideBundle = relative(join(packagedApp, 'Contents/Resources'), fileURLToPath(page.url()))
+        if (!insideBundle || insideBundle === '..' || insideBundle.startsWith(`..${sep}`) || isAbsolute(insideBundle)) {
+          throw new Error('Packaged acceptance must use a renderer inside the selected app bundle')
+        }
+      }
       if (options.onboardingCompleted !== false) {
         const dialog = page.locator('#onboarding-dialog')
         if (await dialog.isVisible().catch(() => false)) {

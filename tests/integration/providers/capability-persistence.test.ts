@@ -23,7 +23,7 @@ it('persists capability test metadata without prompt or output text', async () =
 
     repository.updateTestResult(id, {
       capability: 'agent', testedAt: timestamp, testedModel: 'qwen3', latencyMs: 42, errorCode: null,
-    })
+    }, repository.get(id)!)
 
     expect(repository.get(id)).toMatchObject({
       capability: 'agent', lastTestedAt: timestamp, lastTestErrorCode: null,

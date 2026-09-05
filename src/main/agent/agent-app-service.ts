@@ -1,7 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import { buildSessionHistory } from './session-history'
 import type { WorkspaceRoot } from '../workspace/path-guard'
-import type { SelectionReference } from '../../shared/contracts/agent'
+import type { SelectionReference, SessionHistoryDTO } from '../../shared/contracts/agent'
 import type { Session, SessionDTO } from '../../shared/contracts/session'
 
 export function initialSessionTitle(prompt: string): string {
@@ -9,7 +9,7 @@ export function initialSessionTitle(prompt: string): string {
 }
 
 export class AgentAppServiceError extends Error {
-  constructor(readonly code: 'WORKSPACE_REQUIRED' | 'WORKSPACE_MISMATCH' | 'SESSION_NOT_FOUND' | 'PROVIDER_UNAVAILABLE') {
+  constructor(readonly code: 'WORKSPACE_REQUIRED' | 'WORKSPACE_MISMATCH' | 'SESSION_NOT_FOUND' | 'PROVIDER_UNAVAILABLE' | 'TASK_ACTIVE') {
     super(code)
     this.name = 'AgentAppServiceError'
   }
@@ -35,11 +35,22 @@ export function createAgentAppService(deps: {
   activities: { list(taskId: string): any[] }
   providers: { materialize(id: string): Promise<unknown> }
   runtimeFactory: (...args: unknown[]) => unknown
-  runtimeRegistry: { register(...args: unknown[]): void; stop?(taskId: string, windowId: number): boolean }
+  runtimeRegistry: {
+    register(...args: unknown[]): void
+    stop?(taskId: string, windowId: number): boolean
+    hasActiveSession?(sessionId: string): boolean
+    hasActiveWindow?(windowId: number): boolean
+    sessionSnapshot?(sessionId: string, windowId: number): SessionHistoryDTO | null
+  }
   startTask?(win: BrowserWindow, input: { session: Session; workspace: ActiveWorkspace; providerConfigId: string; prompt: string; currentPath: string | null; currentContent: string | null; selection: SelectionReference | null }): Promise<{ mode: 'agent' | 'suggestion'; taskId: string | null; suggestion: string | null }>
   now(): string
   createId(): string
 }) {
+  const preparingWindows = new Set<number>()
+  const preparingSessions = new Set<string>()
+  const sessionBusy = (id: string): boolean => preparingSessions.has(id)
+    || !!deps.runtimeRegistry.hasActiveSession?.(id)
+    || ['preparing', 'running', 'waiting-approval'].includes(deps.tasks.latestForSession(id)?.status)
   const activeWorkspace = (win: BrowserWindow, expectedId?: string): ActiveWorkspace => {
     const workspace = deps.workspaceManager.current(win.id)
     if (!workspace) throw new AgentAppServiceError('WORKSPACE_REQUIRED')
@@ -61,6 +72,8 @@ export function createAgentAppService(deps: {
     },
     sessionHistory(win: BrowserWindow, sessionId: string) {
       ownedSession(win, sessionId)
+      const live = deps.runtimeRegistry.sessionSnapshot?.(sessionId, win.id)
+      if (live) return live
       const task = deps.tasks.latestForSession(sessionId)
       return buildSessionHistory({
         messages: deps.messages.list(sessionId),
@@ -88,6 +101,7 @@ export function createAgentAppService(deps: {
     },
     deleteSession(win: BrowserWindow, id: string): boolean {
       ownedSession(win, id)
+      if (sessionBusy(id)) return false
       return deps.sessions.delete(id)
     },
     async start(win: BrowserWindow, input: {
@@ -95,7 +109,9 @@ export function createAgentAppService(deps: {
       currentPath: string | null; currentContent: string | null; selection: SelectionReference | null
     }): Promise<{ mode: 'agent' | 'suggestion'; taskId: string | null; sessionId: string; suggestion: string | null }> {
       const workspace = activeWorkspace(win, input.workspaceId)
+      if (preparingWindows.has(win.id) || deps.runtimeRegistry.hasActiveWindow?.(win.id)) throw new AgentAppServiceError('TASK_ACTIVE')
       let session = input.sessionId ? ownedSession(win, input.sessionId) : null
+      if (session && sessionBusy(session.id)) throw new AgentAppServiceError('TASK_ACTIVE')
       if (!session) session = this.createSession(win, {
         workspaceId: input.workspaceId,
         title: initialSessionTitle(input.prompt),
@@ -107,14 +123,22 @@ export function createAgentAppService(deps: {
           modelSwitch: { providerConfigId: input.providerConfigId }, createdAt: deps.now(),
         })
       }
-      const result = await deps.startTask(win, {
-        session, workspace, providerConfigId: input.providerConfigId, prompt: input.prompt,
-        currentPath: input.currentPath, currentContent: input.currentContent, selection: input.selection,
-      })
-      return { ...result, sessionId: session.id }
+      preparingWindows.add(win.id)
+      preparingSessions.add(session.id)
+      try {
+        const result = await deps.startTask(win, {
+          session, workspace, providerConfigId: input.providerConfigId, prompt: input.prompt,
+          currentPath: input.currentPath, currentContent: input.currentContent, selection: input.selection,
+        })
+        return { ...result, sessionId: session.id }
+      } finally {
+        preparingWindows.delete(win.id)
+        preparingSessions.delete(session.id)
+      }
     },
     switchModel(win: BrowserWindow, input: { sessionId: string; providerConfigId: string }): void {
       ownedSession(win, input.sessionId)
+      if (sessionBusy(input.sessionId)) throw new AgentAppServiceError('TASK_ACTIVE')
       deps.messages.create({
         id: deps.createId(), sessionId: input.sessionId, role: 'system', content: [],
         modelSwitch: { providerConfigId: input.providerConfigId }, createdAt: deps.now(),

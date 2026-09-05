@@ -1,104 +1,61 @@
-# ColaMD
+# DraftMD
 
 ## 产品定位
 
-**Markdown as Database 的原生编辑器与模板渲染平台。**
+DraftMD 是开源的 macOS AI Markdown 编辑器，由 ColaMD 衍生。用户在本地文件夹中编辑 Markdown，也可以通过内置 Agent 阅读、整理和修改工作区文档。外部工具修改文件时，编辑器同步变化并保护未保存的本地编辑。
 
-### 解决的核心问题
+当前产品范围以 [产品设计](docs/superpowers/specs/2026-08-31-draftmd-product-design.md) 为依据；实现状态和剩余发布工作见 [当前路线图](docs/roadmap.md)。上游历史不代表 DraftMD 的功能承诺。
 
-HTML 难改——结构、样式、内容全混在一起，人改麻烦，Agent 改也要理解整个文件。
+## 核心工作流
 
-解法：把内容从 HTML 里剥离出来，放进 markdown。HTML 变成纯模板，markdown 变成数据库。改内容只改 markdown，完全不碰 HTML。
+1. 打开文件夹作为工作区，浏览 Markdown 文件和当前文档大纲。
+2. 配置并测试模型服务，按实际能力区分 Agent、Chat only 和 Unavailable。
+3. 在任务面板发起对话或文档任务；可以附带当前文档或选区上下文。
+4. 查看流式回复、工具活动和删除审批；运行中的任务可以停止。
+5. 查看文件变更和 Diff，按任务撤销；发生冲突时保留用户后续修改。
+6. 在本地会话历史中继续工作，启动时处理被中断的任务。
 
-### 战略方向
+## 安全和数据边界
 
-- **内容层**：`.md` 文件，字段固定，人和 Agent 都能轻松编辑
-- **模板层**：各种 HTML 模板（PPT、游戏化界面、博客、简历、产品落地页……）
-- **ColaMD**：连接两者的工具，也是这个生态的入口
+- 文件工具只操作用户选定工作区内允许的 Markdown 文件，必须通过现有路径授权、版本检查和写入流程。
+- 删除文档需要用户审批；Chat only 不提供文件工具。
+- 不向模型提供 shell、网络浏览、MCP 或任意文件系统访问。
+- 模型凭据和秘密请求头保存在 macOS Keychain，不进入 Renderer、SQLite、日志或诊断导出。
+- 会话、任务和配置元数据保存在本地 SQLite；快照用于 Diff、Undo 和恢复。
+- 启动恢复成功后，仅清理目录修改时间超过 30 天且没有任何任务引用的快照。数据库恢复异常或隔离备份存在时暂停清理。详细规则见 [隐私说明](docs/privacy.md)。
+- 删除会话不删除 Markdown 文档。
 
-一份 markdown，多种渲染形态。未来第三方可以基于同一份 markdown 做自己的模板。
+## 界面约定
 
-### 核心理念：Markdown as Database
+- 编辑器是视觉中心；保留轻量标题栏、可隐藏的文件与大纲面板、可收起的 Agent Dock。
+- 不添加常驻格式工具栏或状态栏。复用已有控件、菜单和交互模式。
+- 图标复用现有线性 SVG，统一尺寸、线宽和状态；图标按钮提供 tooltip、`title` 和 `aria-label`。
+- 界面文案通过共享 i18n 同时支持英文和简体中文。
+- 颜色使用语义 CSS 变量，新增变量时同步全部 12 个内置主题。
+- 完整尺寸、布局和可访问性要求见 [design.md](design.md)。
 
-Markdown 不只是文档，而是**结构化内容的数据源**。
+## 范围限制
 
-- **Markdown = 数据**：用固定字段（frontmatter + 约定的 section 结构）承载内容，Agent 只需按字段改内容
-- **HTML 模板 = 视图**：模板负责样式、动效、交互，不关心内容
-- **解耦**：换模板就是换皮，换内容不影响模板
-- **简单约定优先**：宁可让 markdown 字段固定一些，也不要让模板去猜语义
+当前面向 macOS，不承诺 Windows、Linux、iOS 或 Web 支持。云同步、协作编辑、知识库和标签管理、自定义主题导入、Word/图片导出及多窗口产品体验不属于当前 MVP 的验收范围。保留的上游代码或内部窗口管理能力不等于已支持这些产品功能。自动更新尚未启用。
 
-## 设计哲学
+## 技术结构
 
-### 如非必要，勿增实体
+- `src/main/agent/`：模型运行、任务生命周期、审批与恢复。
+- `src/main/workspace/`：工作区与文件访问边界。
+- `src/main/changes/`：快照、变更集、Diff、Undo 和保留策略。
+- `src/main/persistence/`：SQLite 迁移与 repositories。
+- `src/main/index.ts`：应用服务组装与启动。
+- `src/shared/contracts/`：共享类型与 Zod 校验的 IPC 合约。
+- `src/shared/i18n/`：双语文案。
+- `src/preload/`：受限 IPC 桥接。
+- `src/renderer/agent/`：Agent Dock 与会话交互。
+- `src/renderer/editor/`、`src/renderer/themes/`：Milkdown 编辑器和主题。
+- `tests/`：Vitest、集成、安全、性能及 Playwright Electron 测试。
 
-这是 ColaMD 的第一原则。每增加一个 UI 元素、一个功能、一行代码，都要问：这是绝对必要的吗？默认答案是否。
+## 开发与发布
 
-- 不要工具栏（用户会用快捷键和 Markdown 语法）
-- 不要常驻侧边栏（打开文件时显示所在目录；无文件时默认显示文稿目录，可 ⌘⇧B 隐藏）
-- 不要状态栏
-- 界面只有：标题栏（拖拽用）+ 编辑器 + 文件列表面板
-- 追求极致的简单，一个功能做到极致
+使用 TypeScript 严格模式，保持编辑器、文件 I/O、IPC 和视觉样式的职责划分；优先遵循现有模块和 helper。行为改动增加对应回归覆盖，按 [CONTRIBUTING.md](CONTRIBUTING.md) 运行检查。
 
-### 核心功能优先级
+普通 push 和 PR 使用 `CI / macOS checks` 检查；发布由独立工作流处理。未发布改动不要写成已进入预览安装包。签名、公证、真实硬件和模型服务验证状态见 [当前路线图](docs/roadmap.md)。
 
-1. **文件热更新**（核心卖点）— 外部 Agent 修改 .md 时自动刷新，实时看到 Agent 的工作
-2. **所见即所得** — 输入 Markdown 即刻渲染为富文本
-3. **文件列表面板** — 打开文件时显示所在目录的 Markdown 文件；无文件时默认显示文稿目录；支持轻量目录浏览、点击切换，Agent 新建/删除文件实时刷新
-4. **主题系统** — CSS 主题，可导入自定义主题
-5. **导出** — PDF、HTML
-
-### UI 视觉与交互规范
-
-- **图标统一使用线性 SVG**：功能图标不使用 Unicode 字符、Emoji 或系统字体图标代替。
-- **线条统一**：默认 `stroke-width: 1.3`，使用 `stroke-linecap="round"` 和 `stroke-linejoin="round"`；同一组图标的尺寸、视口和视觉重量保持一致。
-- **同类控件统一**：文件、文件夹、返回上级等图标应使用同一套线性图标语言，不允许单独引入粗细或风格不同的符号。
-- **图标必须可理解**：每个图标按钮都要有 hover 文字说明，同时设置 `title` 和 `aria-label`；说明文字使用简洁、自然的中文。
-- **优先复用样式**：图标尺寸、间距、颜色和 hover 状态统一放在共享 CSS 中，避免在业务代码里写零散样式。
-- **克制可见元素**：遵循“如非必要，勿增实体”，只在确有功能价值时增加图标、按钮或提示。
-
-### 发布约定
-
-- 每个大版本更新后：在 `resources/demo/changelog.md` **追加**本版更新内容，并更新对应的演示文件（Help 菜单 → 新功能演示，⌘⇧D）
-- 演示目录是**可玩的 changelog**：changelog.md 记录更新历史，同目录的演示文件让用户上手玩，而不是只读文字
-- 演示页已接入菜单，打包时随 extraResources 发布
-
-### 不做的事情
-
-- 不做持久化工作区和全量文件树（只提供当前目录与默认文稿目录的轻量浏览）
-- 不做知识库管理
-- 不做云同步、协作编辑
-- 不做笔记组织和标签系统
-- 不加不必要的 UI 元素（工具栏、状态栏等）
-
-## 技术栈
-
-- Electron（桌面跨平台）
-- Milkdown（基于 ProseMirror 的 WYSIWYG Markdown 框架）
-- TypeScript 严格模式
-- electron-vite（构建）
-- electron-builder（打包）
-
-## 项目结构
-
-```
-src/
-├── main/           # Electron 主进程
-│   └── index.ts    # 窗口管理、文件 I/O、菜单、文件监听
-├── preload/        # 安全 IPC 桥接
-│   └── index.ts
-└── renderer/       # 渲染进程
-    ├── index.html
-    ├── main.ts     # 入口，连接编辑器和 IPC
-    ├── editor/     # Milkdown 编辑器核心
-    ├── themes/     # CSS 主题 + 主题管理器
-    └── env.d.ts
-```
-
-## 开发规范
-
-- TypeScript 严格模式
-- 编辑器核心与 UI 解耦
-- 主题 CSS 与编辑器逻辑完全分离
-- 代码简洁，不过度设计
-- 每个新功能先问：这是必要的吗？
-- UI、图标、间距和交互规范详见 [design.md](design.md)，所有参与者提交界面改动前都应检查贡献清单。
+保留 [LICENSE](LICENSE) 和 [NOTICE.md](NOTICE.md) 中的 ColaMD 来源、版权及第三方声明。演示和更新历史位于 `resources/demo/`，随实际发布更新。

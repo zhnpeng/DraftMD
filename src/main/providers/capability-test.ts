@@ -23,7 +23,7 @@ export interface CapabilityTestDependencies {
     model: string
     latencyMs: number
     errorCode: ProviderErrorCode | null
-  }): void
+  }, expected: ProviderConfig): boolean | void
   nonce(): string
   now(): number
 }
@@ -55,6 +55,16 @@ export function createCapabilityTester(dependencies: CapabilityTestDependencies)
         tools: [ECHO_TOOL], maxOutputTokens: 1_024,
       }
       const started = dependencies.now()
+      const finish = (capability: ProviderConfig['capability'], latencyMs: number, errorCode: ProviderErrorCode | null, warning: string | null = null): CapabilityTestResult => {
+        const accepted = dependencies.persist(id, {
+          capability, testedAt: new Date().toISOString(), model: config.model, latencyMs, errorCode,
+        }, config)
+        if (accepted === false) return {
+          capability: 'unavailable', cancelled: true, latencyMs: null,
+          model: config.model, errorCode: null, warning: 'CONFIG_CHANGED',
+        }
+        return { capability, cancelled: false, latencyMs, model: config.model, errorCode, warning }
+      }
       let sawText = false
       let validTool = false
       let invalidTool = false
@@ -75,10 +85,7 @@ export function createCapabilityTester(dependencies: CapabilityTestDependencies)
         const latencyMs = Math.max(0, dependencies.now() - started)
         const capability = validTool ? 'agent' : 'chat-only'
         const warning = invalidTool ? 'INVALID_TOOL_CALL' : null
-        dependencies.persist(id, {
-          capability, testedAt: new Date().toISOString(), model: config.model, latencyMs, errorCode: null,
-        })
-        return { capability, cancelled: false, latencyMs, model: config.model, errorCode: null, warning }
+        return finish(capability, latencyMs, null, warning)
       } catch (error) {
         const code = safeCode(error)
         if (signal.aborted || code === 'CANCELLED') return {
@@ -87,15 +94,9 @@ export function createCapabilityTester(dependencies: CapabilityTestDependencies)
         }
         const latencyMs = Math.max(0, dependencies.now() - started)
         if (error instanceof ProviderError && code === 'BAD_REQUEST' && error.status === null) {
-          dependencies.persist(id, {
-            capability: 'chat-only', testedAt: new Date().toISOString(), model: config.model, latencyMs, errorCode: null,
-          })
-          return { capability: 'chat-only', cancelled: false, latencyMs, model: config.model, errorCode: null, warning: 'INVALID_TOOL_CALL' }
+          return finish('chat-only', latencyMs, null, 'INVALID_TOOL_CALL')
         }
-        dependencies.persist(id, {
-          capability: 'unavailable', testedAt: new Date().toISOString(), model: config.model, latencyMs, errorCode: code,
-        })
-        return { capability: 'unavailable', cancelled: false, latencyMs, model: config.model, errorCode: code, warning: null }
+        return finish('unavailable', latencyMs, code)
       }
     },
   }
