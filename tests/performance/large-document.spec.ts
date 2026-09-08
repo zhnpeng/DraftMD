@@ -35,6 +35,12 @@ test('opens and edits a 5 MiB mixed Markdown document without a one-second rende
       observer.observe({ type: 'longtask' })
       Object.assign(window, { __draftmdLongTasks: { durations, observer } })
     })
+    const profiler = process.env.DRAFTMD_TRACE_PERFORMANCE === '1' ? await page.context().newCDPSession(page) : null
+    const traceEvents: unknown[] = []
+    if (profiler) {
+      profiler.on('Tracing.dataCollected', ({ value }) => traceEvents.push(...value))
+      await profiler.send('Tracing.start', { categories: 'devtools.timeline,disabled-by-default-devtools.timeline,blink,accessibility', transferMode: 'ReportEvents' })
+    }
     const editStarted = performance.now()
     const edited = await source.evaluate((element: HTMLTextAreaElement) => {
       const sentinel = ' DRAFTMD_LARGE_EDIT_42'
@@ -58,6 +64,16 @@ test('opens and edits a 5 MiB mixed Markdown document without a one-second rende
     }).toContain('DRAFTMD_LARGE_EDIT_42')
 
     const saveMs = performance.now() - saveStarted
+    if (profiler) {
+      const complete = new Promise<void>(resolve => profiler.once('Tracing.tracingComplete', () => resolve()))
+      await profiler.send('Tracing.end')
+      await complete
+      await profiler.detach()
+      await import('node:fs/promises').then(async ({ mkdir, writeFile }) => {
+        await mkdir('artifacts/performance', { recursive: true })
+        await writeFile('artifacts/performance/large-document-trace.json', JSON.stringify({ traceEvents }))
+      })
+    }
     const longTasks = await page.evaluate(() => {
       const state = (window as unknown as { __draftmdLongTasks: { durations: number[]; observer: PerformanceObserver } }).__draftmdLongTasks
       state.observer.disconnect()

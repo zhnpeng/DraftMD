@@ -1,0 +1,35 @@
+name: Performance diagnostics
+
+on:
+  push:
+    branches: ['diagnostics/large-document']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    env:
+      DRAFTMD_TRACE_PERFORMANCE: '1'
+      DRAFTMD_LARGE_DOCUMENT_EDIT_BUDGET_MS: '2000'
+      DRAFTMD_LARGE_DOCUMENT_LONG_TASK_BUDGET_MS: '3000'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright test --config playwright.performance.config.ts large-document.spec.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: large-document-diagnostics
+          path: |
+            artifacts/performance/
+            test-results/
+          retention-days: 7
+          if-no-files-found: warn
