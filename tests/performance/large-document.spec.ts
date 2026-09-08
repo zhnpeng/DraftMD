@@ -35,6 +35,9 @@ test('opens and edits a 5 MiB mixed Markdown document without a one-second rende
       observer.observe({ type: 'longtask' })
       Object.assign(window, { __draftmdLongTasks: { durations, observer } })
     })
+    const profiler = await page.context().newCDPSession(page)
+    await profiler.send('Profiler.enable')
+    await profiler.send('Profiler.start')
     const editStarted = performance.now()
     const edited = await source.evaluate((element: HTMLTextAreaElement) => {
       const sentinel = ' DRAFTMD_LARGE_EDIT_42'
@@ -58,6 +61,12 @@ test('opens and edits a 5 MiB mixed Markdown document without a one-second rende
     }).toContain('DRAFTMD_LARGE_EDIT_42')
 
     const saveMs = performance.now() - saveStarted
+    const { profile } = await profiler.send('Profiler.stop')
+    await profiler.detach()
+    await import('node:fs/promises').then(async ({ mkdir, writeFile }) => {
+      await mkdir('artifacts/performance', { recursive: true })
+      await writeFile('artifacts/performance/large-document.cpuprofile', JSON.stringify(profile))
+    })
     const longTasks = await page.evaluate(() => {
       const state = (window as unknown as { __draftmdLongTasks: { durations: number[]; observer: PerformanceObserver } }).__draftmdLongTasks
       state.observer.disconnect()
