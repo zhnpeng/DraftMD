@@ -100,6 +100,7 @@ export function createSourceModeController(input: {
   const setReducedRendering = (next: boolean): void => {
     if (reducedRendering === next) return
     reducedRendering = next
+    input.sourceElement.setAttribute('wrap', next ? 'off' : 'soft')
     input.toggleButton.disabled = next
     input.toggleButton.setAttribute('aria-disabled', String(next))
     input.onReducedRenderingChanged?.(next)
