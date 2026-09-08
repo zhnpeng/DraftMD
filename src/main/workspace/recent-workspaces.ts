@@ -31,8 +31,13 @@ export function parseRecentWorkspaces(serialized: string): string[] {
   }
 }
 
-export function addRecentWorkspace(recent: string[], path: string): string[] {
-  return [path, ...recent.filter((candidate) => candidate !== path)].slice(0, 10)
+function workspacePathKey(path: string, isWindows: boolean): string {
+  return isWindows ? path.normalize('NFC').toLowerCase() : path
+}
+
+export function addRecentWorkspace(recent: string[], path: string, isWindows = process.platform === 'win32'): string[] {
+  const pathKey = workspacePathKey(path, isWindows)
+  return [path, ...recent.filter((candidate) => workspacePathKey(candidate, isWindows) !== pathKey)].slice(0, 10)
 }
 
 export function createRecentWorkspaces(deps: RecentWorkspacesDependencies): RecentWorkspaces {

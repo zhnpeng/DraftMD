@@ -1,4 +1,5 @@
 import { BrowserWindow, dialog, type IpcMainEvent } from 'electron'
+import { windowChrome } from './window-options'
 import { basename, dirname, extname, isAbsolute, join, relative, sep } from 'node:path'
 import type { Dirent } from 'node:fs'
 import { DocumentVersionMismatchError, type DocumentService, type DocumentDiskSnapshot, type DocumentSnapshotLoader } from '../documents/document-service'
@@ -31,7 +32,7 @@ interface PendingDocumentStateRequest {
 
 export interface WindowManager {
   createWindow(filePath?: string, initialContent?: string, initialBrowsePath?: string): BrowserWindow
-  openFile(filePath: string, preferredWindow?: BrowserWindow): Promise<void>
+  openFile(filePath: string, preferredWindow?: BrowserWindow): Promise<BrowserWindow | null>
   prepareForWorkspace(win: BrowserWindow, rootPath: string): Promise<boolean>
   loadFileInWindow(win: BrowserWindow, filePath: string): Promise<{ path: string; content: string; version: string } | null>
   getState(win: BrowserWindow): WindowState
@@ -83,6 +84,7 @@ function sendEvent<Channel extends keyof typeof IpcEventSchemas>(
 
 export function createWindowManager(deps: WindowManagerDeps): WindowManager {
   const states = new Map<number, WindowState>()
+  const openingPaths = new Map<number, string>()
   const pendingDocumentStateRequests = new Map<string, PendingDocumentStateRequest>()
   let nextDocumentStateRequestId = 0
   let isQuitting = false
@@ -181,14 +183,14 @@ export function createWindowManager(deps: WindowManagerDeps): WindowManager {
 
   const findWindowForFile = (filePath: string): BrowserWindow | null => {
     for (const [id, state] of states) {
-      if (state.filePath === filePath) return BrowserWindow.fromId(id) ?? null
+      if (state.filePath === filePath || openingPaths.get(id) === filePath) return BrowserWindow.fromId(id) ?? null
     }
     return null
   }
 
   const findEmptyWindow = (): BrowserWindow | null => {
     for (const [id, state] of states) {
-      if (!state.filePath) return BrowserWindow.fromId(id) ?? null
+      if (!state.filePath && !openingPaths.has(id)) return BrowserWindow.fromId(id) ?? null
     }
     return null
   }
@@ -339,7 +341,7 @@ export function createWindowManager(deps: WindowManagerDeps): WindowManager {
   const createWindow = (filePath?: string, initialContent?: string, initialBrowsePath?: string): BrowserWindow => {
     const win = new BrowserWindow({
       width: 960, height: 720, minWidth: 600, minHeight: 400,
-      titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 14 },
+      ...windowChrome(deps.platform),
       webPreferences: {
         preload: deps.preloadPath, contextIsolation: true, nodeIntegration: false,
         sandbox: true, spellcheck: false,
@@ -348,12 +350,13 @@ export function createWindowManager(deps: WindowManagerDeps): WindowManager {
     deps.onStartupMark?.('window-created')
     const state = getState(win)
     if (initialBrowsePath) state.browsePath = initialBrowsePath
+    if (filePath) openingPaths.set(win.id, filePath)
     if (deps.rendererURL) void win.loadURL(deps.rendererURL)
     else void win.loadFile(deps.rendererPath)
     win.webContents.on('did-finish-load', () => {
       deps.onStartupMark?.('renderer-loaded')
-      sendEvent(win, 'app-bootstrap', { locale: deps.locale(), platform: 'darwin', appVersion: deps.appVersion(), databaseWarning: deps.databaseWarning() })
-      if (filePath) void loadFileInWindow(win, filePath)
+      sendEvent(win, 'app-bootstrap', { locale: deps.locale(), platform: deps.platform, appVersion: deps.appVersion(), databaseWarning: deps.databaseWarning() })
+      if (filePath) void loadFileInWindow(win, filePath).finally(() => openingPaths.delete(win.id))
       else if (initialContent) sendEvent(win, 'file-opened', { path: null, content: initialContent, version: null })
     })
     win.on('close', (event) => {
@@ -376,14 +379,14 @@ export function createWindowManager(deps: WindowManagerDeps): WindowManager {
     createWindow,
     async openFile(filePath, preferredWindow) {
       const existing = findWindowForFile(filePath)
-      if (existing) { existing.focus(); return }
+      if (existing) { existing.focus(); return existing }
       const preferredState = preferredWindow ? getState(preferredWindow) : null
-      const empty = preferredState && !preferredState.filePath ? preferredWindow! : findEmptyWindow()
+      const empty = preferredState && !preferredState.filePath && !openingPaths.has(preferredWindow!.id) ? preferredWindow! : findEmptyWindow()
       if (empty) {
         const state = getState(empty)
         const wasDirty = state.dirty
         const outcome = wasDirty ? await confirmWindowClose(empty, state) : 'saved'
-        if (outcome === 'cancelled') return
+        if (outcome === 'cancelled') return null
         const replacementPath = state.filePath
         const replacementGeneration = state.documentGeneration
         const opened = await loadFileInWindow(empty, filePath)
@@ -391,9 +394,11 @@ export function createWindowManager(deps: WindowManagerDeps): WindowManager {
           state.dirty = true
         }
         empty.focus()
-        return
+        return opened ? empty : null
       }
-      createWindow(filePath).focus()
+      const win = createWindow(filePath)
+      win.focus()
+      return win
     },
     loadFileInWindow,
     async prepareForWorkspace(win, rootPath) {
@@ -514,6 +519,7 @@ export function createWindowManager(deps: WindowManagerDeps): WindowManager {
     setQuitting(quitting) { isQuitting = quitting },
     dispose(win) {
       deps.watchService.stop(win)
+      openingPaths.delete(win.id)
       states.delete(win.id)
     },
   }

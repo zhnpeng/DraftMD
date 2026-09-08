@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { execFileSync } from 'node:child_process'
+const { buildForTests } = require('../../../scripts/build-for-tests.js')
 import { Script } from 'node:vm'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -34,7 +34,7 @@ function validMainAudit(): ModuleAudit {
 }
 
 beforeAll(() => {
-  execFileSync('npm', ['run', 'build'], { cwd: projectRoot, stdio: 'pipe' })
+  buildForTests(projectRoot)
   mainAudit = readAudit('main')
   preloadAudit = readAudit('preload')
   rendererAudit = readAudit('renderer')

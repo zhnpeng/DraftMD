@@ -6,10 +6,45 @@ const { execFileSync } = require('node:child_process')
 const { builtinModules, createRequire } = require('node:module')
 const { readdirSync } = require('node:fs')
 
-const KEYRING_PACKAGES = [
-  '@napi-rs/keyring-darwin-arm64',
-  '@napi-rs/keyring-darwin-x64',
-]
+const NATIVE_TARGETS = {
+  darwin: {
+    universal: {
+      betterSqlite3: ['darwin-arm64.node', 'darwin-x64.node'],
+      keyring: [
+        { name: '@napi-rs/keyring-darwin-arm64', binary: 'keyring.darwin-arm64.node' },
+        { name: '@napi-rs/keyring-darwin-x64', binary: 'keyring.darwin-x64.node' },
+      ],
+    },
+  },
+  win32: {
+    x64: {
+      betterSqlite3: ['win32-x64.node'],
+      keyring: [{ name: '@napi-rs/keyring-win32-x64-msvc', binary: 'keyring.win32-x64-msvc.node' }],
+    },
+  },
+}
+
+const KEYRING_PACKAGES = Object.values(NATIVE_TARGETS).flatMap((platform) => Object.values(platform).flatMap((target) => target.keyring.map(({ name }) => name)))
+
+function nativeTarget(platform = 'darwin', arch = 'universal') {
+  const target = NATIVE_TARGETS[platform]?.[arch]
+  if (!target) throw new Error(`Unsupported native package target: ${platform} ${arch}`)
+  return { platform, arch, ...target }
+}
+
+function parseTargetArguments(args) {
+  let platform = 'darwin'
+  let arch = 'universal'
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index]
+    if (argument === '--platform') platform = args[++index]
+    else if (argument.startsWith('--platform=')) platform = argument.slice('--platform='.length)
+    else if (argument === '--arch') arch = args[++index]
+    else if (argument.startsWith('--arch=')) arch = argument.slice('--arch='.length)
+    else throw new Error(`Unknown native package option: ${argument}`)
+  }
+  return nativeTarget(platform, arch)
+}
 
 function lockedPackage(lock, name) {
   const item = lock?.packages?.[`node_modules/${name}`]
@@ -129,34 +164,60 @@ function stageLegalNotices(root, packageRoot) {
   cpSync(join(root, 'NOTICE.md'), join(packageRoot, 'NOTICE.md'))
 }
 
-async function prepareNativePackages(root = process.cwd()) {
-  const lock = JSON.parse(readFileSync(join(root, 'package-lock.json'), 'utf8'))
-  for (const name of KEYRING_PACKAGES) {
-    const target = join(root, 'node_modules', ...name.split('/'))
-    const binary = join(target, `keyring.darwin-${name.endsWith('arm64') ? 'arm64' : 'x64'}.node`)
-    if (existsSync(binary)) continue
-    const item = lockedPackage(lock, name)
-    const bytes = await download(item.resolved)
-    verifyIntegrity(bytes, item.integrity)
-    const staging = `${target}.draftmd-tmp`
-    const archive = `${target}.draftmd-tmp.tgz`
+async function ensureKeyringPackage(root, lock, keyring) {
+  const target = join(root, 'node_modules', ...keyring.name.split('/'))
+  const binary = join(target, keyring.binary)
+  if (existsSync(binary)) return
+  const item = lockedPackage(lock, keyring.name)
+  const bytes = await download(item.resolved)
+  verifyIntegrity(bytes, item.integrity)
+  const staging = `${target}.draftmd-tmp`
+  const archive = `${target}.draftmd-tmp.tgz`
+  rmSync(staging, { recursive: true, force: true })
+  rmSync(archive, { force: true })
+  mkdirSync(staging, { recursive: true })
+  mkdirSync(dirname(archive), { recursive: true })
+  require('node:fs').writeFileSync(archive, bytes, { mode: 0o600 })
+  try {
+    execFileSync('tar', ['-xzf', archive, '--strip-components=1', '-C', staging])
+    if (!existsSync(join(staging, keyring.binary))) {
+      throw new Error(`Native package archive missing expected binary: ${keyring.name}`)
+    }
+    rmSync(target, { recursive: true, force: true })
+    renameSync(staging, target)
+  } finally {
     rmSync(staging, { recursive: true, force: true })
     rmSync(archive, { force: true })
-    mkdirSync(staging, { recursive: true })
-    mkdirSync(dirname(archive), { recursive: true })
-    require('node:fs').writeFileSync(archive, bytes, { mode: 0o600 })
-    try {
-      execFileSync('tar', ['-xzf', archive, '--strip-components=1', '-C', staging])
-      if (!existsSync(join(staging, item.cpu?.includes('arm64') ? 'keyring.darwin-arm64.node' : 'keyring.darwin-x64.node'))) {
-        throw new Error(`Native package archive missing expected binary: ${name}`)
-      }
-      rmSync(target, { recursive: true, force: true })
-      renameSync(staging, target)
-    } finally {
-      rmSync(staging, { recursive: true, force: true })
-      rmSync(archive, { force: true })
-    }
   }
+}
+
+function nativeCopiesForTarget(target) {
+  return [
+    ['node_modules/better-sqlite3/lib', 'better-sqlite3/lib'],
+    ['node_modules/better-sqlite3/package.json', 'better-sqlite3/package.json'],
+    ...target.betterSqlite3.map((binary) => [`node_modules/better-sqlite3/prebuilds/${binary}`, `better-sqlite3/prebuilds/${binary}`]),
+    ['node_modules/@napi-rs/keyring/index.js', '@napi-rs/keyring/index.js'],
+    ['node_modules/@napi-rs/keyring/package.json', '@napi-rs/keyring/package.json'],
+    ...target.keyring.map(({ name }) => [`node_modules/${name}`, name]),
+  ]
+}
+
+function stagedPackageMetadata(project) {
+  return {
+    name: project.name,
+    productName: project.productName,
+    version: project.version,
+    description: project.description,
+    main: project.main,
+    license: project.license,
+    author: 'DraftMD contributors',
+    repository: project.repository,
+  }
+}
+
+async function prepareNativePackages(root = process.cwd(), target = nativeTarget()) {
+  const lock = JSON.parse(readFileSync(join(root, 'package-lock.json'), 'utf8'))
+  for (const keyring of target.keyring) await ensureKeyringPackage(root, lock, keyring)
   const packageRoot = join(root, '.build/package')
   const stage = join(packageRoot, 'node_modules')
   rmSync(packageRoot, { recursive: true, force: true })
@@ -166,20 +227,10 @@ async function prepareNativePackages(root = process.cwd()) {
     mkdirSync(dirname(target), { recursive: true })
     cpSync(source, target, { recursive: true })
   }
-  for (const name of ['better-sqlite3', '@napi-rs/keyring', '@napi-rs/keyring-darwin-arm64', '@napi-rs/keyring-darwin-x64']) {
+  for (const name of ['better-sqlite3', '@napi-rs/keyring', ...KEYRING_PACKAGES]) {
     rmSync(join(stage, ...name.split('/')), { recursive: true, force: true })
   }
-  const nativeCopies = [
-    ['node_modules/better-sqlite3/lib', 'better-sqlite3/lib'],
-    ['node_modules/better-sqlite3/package.json', 'better-sqlite3/package.json'],
-    ['node_modules/better-sqlite3/prebuilds/darwin-arm64.node', 'better-sqlite3/prebuilds/darwin-arm64.node'],
-    ['node_modules/better-sqlite3/prebuilds/darwin-x64.node', 'better-sqlite3/prebuilds/darwin-x64.node'],
-    ['node_modules/@napi-rs/keyring/index.js', '@napi-rs/keyring/index.js'],
-    ['node_modules/@napi-rs/keyring/package.json', '@napi-rs/keyring/package.json'],
-    ['node_modules/@napi-rs/keyring-darwin-arm64', '@napi-rs/keyring-darwin-arm64'],
-    ['node_modules/@napi-rs/keyring-darwin-x64', '@napi-rs/keyring-darwin-x64'],
-  ]
-  for (const [source, destination] of nativeCopies) {
+  for (const [source, destination] of nativeCopiesForTarget(target)) {
     const target = join(stage, destination)
     mkdirSync(dirname(target), { recursive: true })
     cpSync(join(root, source), target, { recursive: true })
@@ -195,15 +246,7 @@ async function prepareNativePackages(root = process.cwd()) {
   cpSync(join(root, 'electron-builder.yml'), join(packageRoot, 'electron-builder.yml'))
   stageLegalNotices(root, packageRoot)
   const project = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
-  const packageMetadata = {
-    name: project.name,
-    productName: project.productName,
-    version: project.version,
-    description: project.description,
-    main: project.main,
-    license: project.license,
-    author: 'DraftMD contributors',
-  }
+  const packageMetadata = stagedPackageMetadata(project)
   require('node:fs').writeFileSync(join(packageRoot, 'package.json'), `${JSON.stringify(packageMetadata, null, 2)}\n`)
   require('node:fs').writeFileSync(join(packageRoot, 'package-lock.json'), `${JSON.stringify({
     name: project.name,
@@ -215,11 +258,12 @@ async function prepareNativePackages(root = process.cwd()) {
 
 }
 
-module.exports = { KEYRING_PACKAGES, lockedPackage, verifyIntegrity, runtimePackageRoots, runtimeClosure, findSymlinks, stageLegalNotices, prepareNativePackages }
+module.exports = { KEYRING_PACKAGES, nativeTarget, parseTargetArguments, lockedPackage, verifyIntegrity, runtimePackageRoots, runtimeClosure, findSymlinks, stageLegalNotices, nativeCopiesForTarget, stagedPackageMetadata, prepareNativePackages }
 
 if (require.main === module) {
-  prepareNativePackages().then(
-    () => console.log('Prepared locked Darwin native packages.'),
+  const target = parseTargetArguments(process.argv.slice(2))
+  prepareNativePackages(process.cwd(), target).then(
+    () => console.log(`Prepared locked ${target.platform} ${target.arch} native packages.`),
     (error) => { console.error(error.message); process.exitCode = 1 },
   )
 }

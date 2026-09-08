@@ -18,6 +18,11 @@ describe('recent workspaces', () => {
     expect(new Set(recent).size).toBe(10)
   })
 
+  it('deduplicates Windows workspace paths by normalized case', () => {
+    expect(addRecentWorkspace(['C:\\DraftMD\\Notes', 'C:\\DraftMD\\Other'], 'c:\\draftmd\\notes', true))
+      .toEqual(['c:\\draftmd\\notes', 'C:\\DraftMD\\Other'])
+  })
+
   it('fails closed for malformed persisted data', () => {
     expect(parseRecentWorkspaces('{bad json')).toEqual([])
     expect(parseRecentWorkspaces(JSON.stringify({ recent: ['/work/a', 4, null] }))).toEqual(['/work/a'])

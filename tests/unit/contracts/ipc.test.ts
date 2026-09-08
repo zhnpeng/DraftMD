@@ -72,7 +72,7 @@ describe('serializable shared IPC schemas', () => {
     })
   })
 
-  it('accepts only the exact app bootstrap shape for macOS', () => {
+  it('accepts only the exact app bootstrap shape for supported desktops', () => {
     expect(AppBootstrapSchema.parse({ locale: 'en', platform: 'darwin', appVersion: '0.1.0', databaseWarning: null })).toEqual({
       locale: 'en',
       platform: 'darwin',
@@ -95,7 +95,7 @@ describe('serializable shared IPC schemas', () => {
     const ipcSource = readFileSync('src/main/app/ipc.ts', 'utf8')
     const rendererSource = readFileSync('src/renderer/app/bootstrap.ts', 'utf8')
 
-    expect(windowManagerSource).toContain("sendEvent(win, 'app-bootstrap', { locale: deps.locale(), platform: 'darwin', appVersion: deps.appVersion(), databaseWarning: deps.databaseWarning() })")
+    expect(windowManagerSource).toContain("sendEvent(win, 'app-bootstrap', { locale: deps.locale(), platform: deps.platform, appVersion: deps.appVersion(), databaseWarning: deps.databaseWarning() })")
     expect(windowManagerSource).toContain("sendEvent(win, 'file-opened', opened)")
     expect(windowManagerSource).toContain("sendEvent(win, 'file-opened', { path: null, content: initialContent, version: null })")
     expect(ipcSource).toContain('const parsed = schema.result.safeParse(result)')

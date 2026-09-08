@@ -1,4 +1,4 @@
-import { dirname, isAbsolute, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { fromMarkdown } from 'mdast-util-from-markdown'
 import type { Nodes } from 'mdast'
@@ -197,7 +197,10 @@ function sourceImageUrl(src: string, dir: string): string {
   if (!/^file:/i.test(value)) return src
   try {
     const target = fileURLToPath(value)
-    const portable = relative(dir, target)
+    const nativeRelative = relative(dir, target)
+    // A different Windows drive cannot be represented relative to this document.
+    if (isAbsolute(nativeRelative)) return pathToFileURL(target).href
+    const portable = nativeRelative.split(sep).join('/')
     if (!portable) return './'
     return portable.startsWith('.') ? portable : `./${portable}`
   } catch {

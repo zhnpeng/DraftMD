@@ -5,8 +5,10 @@ import { uuidv7 } from '../persistence/ids'
 import { validateProviderEndpoint } from './endpoint-policy'
 import { sameProviderConnection } from './provider-connection'
 import { providerApiMode, type ProviderApiMode } from '../../shared/contracts/provider'
+import { supportsReasoningEffort, type ReasoningEffort } from '../../shared/reasoning-effort'
 
 export interface ProviderConfigInput {
+  reasoningEffort?: ReasoningEffort
   apiMode?: ProviderApiMode
   id?: string
   name: string
@@ -28,6 +30,7 @@ export interface ProviderSecretsInput {
 }
 
 export interface ProviderConfigDTO {
+  reasoningEffort?: ReasoningEffort
   apiMode?: ProviderApiMode
   id: string
   name: string
@@ -63,7 +66,7 @@ export interface ProviderConfigServiceDependencies {
 }
 
 export class ProviderConfigServiceError extends Error {
-  constructor(readonly code: 'DUPLICATE_HEADER' | 'CONFIG_NOT_FOUND' | 'CREDENTIALS_REENTRY_REQUIRED') {
+  constructor(readonly code: 'DUPLICATE_HEADER' | 'CONFIG_NOT_FOUND' | 'CREDENTIALS_REENTRY_REQUIRED' | 'UNSUPPORTED_REASONING_EFFORT') {
     super(code)
     this.name = 'ProviderConfigServiceError'
   }
@@ -83,6 +86,7 @@ function dto(config: ProviderConfigRecord): ProviderConfigDTO {
   return {
     id: config.id, name: config.name, kind: config.kind, preset: config.preset,
     apiMode: providerApiMode(config),
+    reasoningEffort: config.reasoningEffort ?? 'default',
     baseUrl: config.baseUrl, model: config.model, timeoutMs: config.timeoutMs,
     streamEnabled: config.streamEnabled, toolsEnabled: config.toolsEnabled,
     insecureHttpApproved: config.insecureHttpApproved, capability: config.capability,
@@ -102,6 +106,9 @@ export function createProviderConfigService(deps: ProviderConfigServiceDependenc
       validateProviderEndpoint(input.baseUrl, input.insecureHttpApproved)
       const id = input.id ? UUIDv7Schema.parse(input.id) : uuidv7()
       const existing = deps.repository.get(id)
+      const apiMode = input.apiMode ?? existing?.apiMode ?? providerApiMode(input)
+      const reasoningEffort = input.reasoningEffort ?? (existing?.kind === input.kind && existing.model === input.model ? existing.reasoningEffort : undefined) ?? 'default'
+      if (!supportsReasoningEffort({ ...input, apiMode }, reasoningEffort)) throw new ProviderConfigServiceError('UNSUPPORTED_REASONING_EFFORT')
       const normalizedHeaders = normalizeHeaders(secrets.headers)
       if (existing && (existing.kind !== input.kind || new URL(existing.baseUrl).href.replace(/\/$/, '') !== new URL(input.baseUrl).href.replace(/\/$/, ''))) {
         const retainKey = existing.credentialRef && !secrets.removeApiKey && !secrets.apiKey
@@ -142,7 +149,7 @@ export function createProviderConfigService(deps: ProviderConfigServiceDependenc
         const timestamp = now()
         const config = ProviderConfigSchema.parse({
           id, name: input.name, kind: input.kind, preset: input.preset, baseUrl: input.baseUrl,
-          apiMode: input.apiMode ?? existing?.apiMode ?? providerApiMode(input),
+          apiMode, reasoningEffort,
           model: input.model, credentialRef, headerCredentialRefs, timeoutMs: input.timeoutMs,
           streamEnabled: input.streamEnabled, toolsEnabled: input.toolsEnabled,
           insecureHttpApproved: input.insecureHttpApproved,

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { DesktopPlatformSchema } from '../platform'
 import { ProviderKindSchema } from './provider'
 import { TaskStatusSchema } from './agent'
 
@@ -38,7 +39,7 @@ export type SafeLogInput = Omit<SafeLogEntry, 'timestamp'>
 export const DiagnosticsAppSchema = z.object({
   version: z.string().min(1).max(128),
   electron: z.string().min(1).max(128),
-  platform: z.literal('darwin'),
+  platform: DesktopPlatformSchema,
   arch: z.enum(['arm64', 'x64']),
   osRelease: z.string().min(1).max(128),
 }).strict()

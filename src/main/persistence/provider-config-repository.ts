@@ -27,9 +27,11 @@ interface ProviderRow {
 }
 
 function fromRow(row: ProviderRow): ProviderConfigRecord {
+  const settings = JSON.parse(row.settings_json)
   const config = ProviderConfigSchema.parse({
     id: row.id, name: row.name, kind: row.provider_type, preset: row.preset,
-    apiMode: JSON.parse(row.settings_json).apiMode ?? 'chat-completions',
+    apiMode: settings.apiMode ?? 'chat-completions',
+    reasoningEffort: settings.reasoningEffort ?? 'default',
     baseUrl: row.endpoint, model: row.model, credentialRef: row.credential_ref,
     headerCredentialRefs: JSON.parse(row.header_credential_refs_json), timeoutMs: row.timeout_ms,
     streamEnabled: Boolean(row.stream_enabled), toolsEnabled: Boolean(row.tools_enabled),
@@ -80,7 +82,7 @@ export function createProviderConfigRepository(database: Database.Database) {
     save(record: ProviderConfigRecord & { createdAt: string; updatedAt: string }): void {
       save.run({
         ...record,
-        settingsJson: JSON.stringify({ apiMode: record.apiMode }),
+        settingsJson: JSON.stringify({ apiMode: record.apiMode, reasoningEffort: record.reasoningEffort ?? 'default' }),
         headerCredentialRefsJson: JSON.stringify(record.headerCredentialRefs),
         streamEnabled: Number(record.streamEnabled), toolsEnabled: Number(record.toolsEnabled),
         insecureHttpApproved: Number(record.insecureHttpApproved), isDefault: Number(record.isDefault),

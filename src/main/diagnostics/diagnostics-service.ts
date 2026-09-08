@@ -14,6 +14,7 @@ import type { SafeLogInput } from '../../shared/contracts/diagnostics'
 export function createDiagnosticsService(input: {
   appVersion(): string
   electronVersion(): string
+  platform?: NodeJS.Platform
   logsDirectory: string
   database: Database.Database
   databaseWarning: 'DATABASE_RECOVERED' | 'DATABASE_MEMORY_FALLBACK' | null
@@ -48,7 +49,7 @@ export function createDiagnosticsService(input: {
       return DiagnosticsBundleSchema.parse({
         categories: ['Application', 'Safe settings', 'Provider metadata', 'Safe logs', 'Database integrity'],
         app: {
-          version: input.appVersion(), electron: input.electronVersion(), platform: 'darwin',
+          version: input.appVersion(), electron: input.electronVersion(), platform: input.platform ?? process.platform,
           arch: arch() === 'x64' ? 'x64' : 'arm64', osRelease: release(),
         },
         settings: { locale: input.locale(), theme: input.theme() },

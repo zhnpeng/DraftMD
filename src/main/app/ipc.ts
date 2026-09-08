@@ -313,21 +313,28 @@ export function registerIpcHandlers(deps: IpcRegistrationDeps): void {
   invokeHandler('install-update', () => deps.installUpdate())
 }
 
-export function createSystemFontLoader(getLocale: () => string): () => Promise<string[]> {
+export function createSystemFontLoader(getLocale: () => string, platform: NodeJS.Platform = process.platform): () => Promise<string[]> {
   let cached: string[] | null = null
   let pending: Promise<string[]> | null = null
   return () => {
     if (cached) return Promise.resolve(cached)
     if (pending) return pending
     pending = new Promise((resolve) => {
-      if (process.platform !== 'darwin') return resolve([])
-      const script = [
+      if (platform !== 'darwin' && platform !== 'win32') return resolve([])
+      const script = platform === 'win32' ? [
+        '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()',
+        'Add-Type -AssemblyName System.Drawing',
+        '$fonts = New-Object System.Drawing.Text.InstalledFontCollection',
+        'try { $fonts.Families | ForEach-Object { $_.Name } } finally { $fonts.Dispose() }',
+      ].join('; ') : [
         'ObjC.import("AppKit")', 'const nm = $.NSFontManager.sharedFontManager', 'const out = []',
         'const fams = nm.availableFontFamilies.js',
         'for (const f of fams) { out.push(nm.localizedNameForFamilyFace($(f), $()).js) }', 'out.join("\\n")',
       ].join('; ')
-      execFile('osascript', ['-l', 'JavaScript', '-e', script], { maxBuffer: 4 * 1024 * 1024, timeout: 15000 }, (error, stdout) => {
-        if (error) console.error('[font-list] osascript failed:', (error as NodeJS.ErrnoException).message)
+      const command = platform === 'win32' ? 'powershell.exe' : 'osascript'
+      const args = platform === 'win32' ? ['-NoProfile', '-NonInteractive', '-Command', script] : ['-l', 'JavaScript', '-e', script]
+      execFile(command, args, { maxBuffer: 4 * 1024 * 1024, timeout: 15000, windowsHide: true }, (error, stdout) => {
+        if (error) console.error('[font-list] system font enumeration failed')
         const collator = new Intl.Collator(getLocale().startsWith('zh') ? 'zh-Hans' : 'en', { sensitivity: 'base', numeric: true })
         cached = error ? [] : [...new Set(stdout.split('\n').map((value) => value.trim()).filter(Boolean))].sort(collator.compare)
         resolve(cached)

@@ -5,6 +5,7 @@ import { ProviderError } from '../provider-errors'
 import { normalizeOpenAIError, type OpenAISDKModule } from './openai-errors'
 import { normalizeOptionalToolArguments, toOpenAIMessages, toOpenAITools } from './openai-messages'
 import { ResponsesAdapter } from './responses-adapter'
+import { explicitReasoningEffort, type ReasoningEffort } from '../../../shared/reasoning-effort'
 
 export interface OpenAIClientBoundary {
   chat: { completions: {
@@ -12,6 +13,7 @@ export interface OpenAIClientBoundary {
   } }
 }
 export interface OpenAIAdapterConfig {
+  reasoningEffort?: ReasoningEffort
   kind: Extract<ProviderKind, 'openai' | 'openai-compatible'>
   model: string
   baseUrl: string
@@ -35,10 +37,12 @@ export class OpenAIAdapter implements ProviderAdapter {
       const stream = await this.client.chat.completions.create({
         model: this.config.model, stream: true, stream_options: { include_usage: true },
         max_completion_tokens: request.maxOutputTokens,
-        messages: toOpenAIMessages(request),
+        ...(explicitReasoningEffort(this.config.reasoningEffort) ? { reasoning_effort: explicitReasoningEffort(this.config.reasoningEffort) } : {}),
+        messages: toOpenAIMessages(request, this.config.kind === 'openai-compatible'),
         tools: this.config.toolsEnabled ? toOpenAITools(request.tools) : undefined,
       }, { signal })
       let text = ''
+      let reasoningContent = ''
       let stopReason: NormalizedStopReason = 'unknown'
       let usage: { inputTokens: number; outputTokens: number; cachedInputTokens?: number } | null = null
       const calls = new Map<number, PendingToolCall>()
@@ -50,6 +54,8 @@ export class OpenAIAdapter implements ProviderAdapter {
           cachedInputTokens: chunk.usage.prompt_tokens_details?.cached_tokens ?? undefined,
         }
         for (const choice of chunk.choices) {
+          const reasoning = (choice.delta as { reasoning_content?: unknown }).reasoning_content
+          if (this.config.kind === 'openai-compatible' && typeof reasoning === 'string') reasoningContent += reasoning
           const delta = choice.delta.content
           if (delta) { text += delta; yield { type: 'text-delta', text: delta } }
           for (const tool of choice.delta.tool_calls ?? []) {
@@ -86,7 +92,7 @@ export class OpenAIAdapter implements ProviderAdapter {
         type: 'completed', stopReason,
         assistantMessage: {
           role: 'assistant', provider: this.config.kind, content,
-          providerData: { content: text || null, toolCalls: providerCalls },
+          providerData: { content: text || null, toolCalls: providerCalls, ...(reasoningContent ? { reasoningContent } : {}) },
         },
       }
     } catch (error) {
@@ -96,11 +102,11 @@ export class OpenAIAdapter implements ProviderAdapter {
 }
 
 export async function createOpenAIAdapter(
-  input: { apiKey: string; model: string; timeoutMs: number; apiMode?: ProviderApiMode },
+  input: { apiKey: string; model: string; timeoutMs: number; apiMode?: ProviderApiMode; reasoningEffort?: ReasoningEffort },
   importer: () => Promise<OpenAISDKModule> = () => import('openai'),
 ): Promise<ProviderAdapter> {
   const sdk = await importer()
   const client = new sdk.default({ apiKey: input.apiKey, timeout: input.timeoutMs, maxRetries: 2 })
   const Adapter = input.apiMode === 'chat-completions' ? OpenAIAdapter : ResponsesAdapter
-  return new Adapter(client, { kind: 'openai', model: input.model, baseUrl: 'https://api.openai.com/v1', timeoutMs: input.timeoutMs, toolsEnabled: true }, sdk)
+  return new Adapter(client, { kind: 'openai', model: input.model, baseUrl: 'https://api.openai.com/v1', timeoutMs: input.timeoutMs, toolsEnabled: true, reasoningEffort: input.reasoningEffort }, sdk)
 }

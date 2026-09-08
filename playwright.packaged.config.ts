@@ -1,13 +1,15 @@
 import { defineConfig } from '@playwright/test'
 
 if (!process.env.DRAFTMD_PACKAGED_APP) {
-  throw new Error('Set DRAFTMD_PACKAGED_APP to the built DraftMD.app bundle before running packaged acceptance')
+  throw new Error('Set DRAFTMD_PACKAGED_APP to the built .app bundle or unpacked DraftMD.exe before running packaged acceptance')
 }
 
 export default defineConfig({
   testDir: './tests',
   testMatch: [
     '**/e2e/foundation.spec.ts',
+    '**/e2e/desktop-platform.spec.ts',
+    '**/e2e/workspace.spec.ts',
     '**/e2e/agent-input.spec.ts',
     '**/e2e/agent-dock-layout.spec.ts',
     '**/e2e/export-layout.spec.ts',

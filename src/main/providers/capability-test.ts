@@ -2,6 +2,7 @@ import type { CapabilityTestResult, ProviderConfig, ProviderErrorCode, ProviderR
 import type { MaterializedProvider } from './provider-factory'
 import type { ProviderAdapter } from './provider-adapter'
 import { ProviderError } from './provider-errors'
+import { explicitReasoningEffort } from '../../shared/reasoning-effort'
 
 const ECHO_TOOL = {
   name: 'draftmd_capability_echo',
@@ -49,10 +50,11 @@ export function createCapabilityTester(dependencies: CapabilityTestDependencies)
         model: config.model, errorCode: null, warning: null,
       }
       const nonce = dependencies.nonce()
+      // Explicit effort needs the same reasoning headroom as normal task requests.
       const request: ProviderRequest = {
         system: 'Call the supplied capability echo tool exactly once with the requested nonce. Do not perform any other action.',
         messages: [{ role: 'user', provider: null, content: [{ type: 'text', text: `Call draftmd_capability_echo with nonce ${nonce}.` }], providerData: null }],
-        tools: [ECHO_TOOL], maxOutputTokens: 1_024,
+        tools: [ECHO_TOOL], maxOutputTokens: explicitReasoningEffort(config.reasoningEffort) ? 64_000 : 1_024,
       }
       const started = dependencies.now()
       const finish = (capability: ProviderConfig['capability'], latencyMs: number, errorCode: ProviderErrorCode | null, warning: string | null = null): CapabilityTestResult => {

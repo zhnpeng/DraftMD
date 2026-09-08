@@ -3,9 +3,10 @@ import type { OpenAISDKModule } from '../openai/openai-errors'
 import { ResponsesAdapter } from '../openai/responses-adapter'
 import type { ProviderApiMode } from '../../../shared/contracts/provider'
 import type { ProviderAdapter } from '../provider-adapter'
+import type { ReasoningEffort } from '../../../shared/reasoning-effort'
 
 export async function createOpenAICompatibleAdapter(
-  input: { apiKey: string | null; model: string; baseUrl: string; timeoutMs: number; headers: Record<string, string>; toolsEnabled: boolean; apiMode?: ProviderApiMode },
+  input: { apiKey: string | null; model: string; baseUrl: string; timeoutMs: number; headers: Record<string, string>; toolsEnabled: boolean; apiMode?: ProviderApiMode; reasoningEffort?: ReasoningEffort },
   importer: () => Promise<OpenAISDKModule> = () => import('openai'),
 ): Promise<ProviderAdapter> {
   const sdk = await importer()
@@ -14,5 +15,5 @@ export async function createOpenAICompatibleAdapter(
     timeout: input.timeoutMs, maxRetries: 2, defaultHeaders: input.headers,
   })
   const Adapter = input.apiMode === 'responses' ? ResponsesAdapter : OpenAIAdapter
-  return new Adapter(client, { kind: 'openai-compatible', model: input.model, baseUrl: input.baseUrl, timeoutMs: input.timeoutMs, toolsEnabled: input.toolsEnabled }, sdk)
+  return new Adapter(client, { kind: 'openai-compatible', model: input.model, baseUrl: input.baseUrl, timeoutMs: input.timeoutMs, toolsEnabled: input.toolsEnabled, reasoningEffort: input.reasoningEffort }, sdk)
 }

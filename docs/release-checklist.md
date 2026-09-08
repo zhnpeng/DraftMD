@@ -1,10 +1,16 @@
 # DraftMD Release Checklist
 
-## Publication Hold - 2026-09-05
+## Publication Authorized — 2026-09-08
 
-The owner withdrew public releases pending successful personal use. Both `v0.1.0` and `v0.1.0-preview.5` were converted to drafts, and the GitHub `Release` workflow was disabled. The unauthenticated GitHub Releases API reports zero public releases. Source, tags, draft assets, and local installations are retained.
+The owner reports successful personal use and explicitly authorizes committing and pushing the current work, creating `v0.1.1`, and publishing a regular unsigned macOS Universal release. This lifts the earlier hold and authorizes re-enabling the Release workflow. Build fresh artifacts from the tag and require the existing source, security, performance, Universal and packaged acceptance gates before publication. Do not republish the old drafts.
 
-Do not publish or republish a release, or re-enable the publishing workflow, until the owner explicitly confirms the app works for their use and requests the first public release. Automated test results alone do not authorize publication. Local development, testing, and local installation may continue under the existing authorization. Build and verify a fresh candidate for the eventual first release.
+Windows remains source/candidate CI only, with no Windows assets attached to this release. Developer ID signing/notarization, physical Intel/macOS 13 validation and exhaustive real-service compatibility remain outstanding and must be disclosed, not inferred from personal use or automated fixtures.
+
+## Historical Publication Hold — 2026-09-05
+
+The owner withdrew public releases pending successful personal use. Both `v0.1.0` and `v0.1.0-preview.5` were converted to drafts, and the GitHub `Release` workflow was disabled. At the time of the hold, the unauthenticated GitHub Releases API reported zero public releases. Source, tags, draft assets, and local installations are retained.
+
+At that time, publication and re-enabling the workflow required the owner to confirm successful personal use and explicitly request a public release. That condition was satisfied on 2026-09-08 as recorded above. Automated test results alone do not authorize publication. Local development, testing, and local installation may continue under the existing authorization. Build and verify a fresh candidate for the eventual first release.
 
 ## Historical Reports
 

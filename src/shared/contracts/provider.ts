@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { ISODateTimeSchema, UUIDv7Schema } from './session'
+import { ReasoningEffortSchema } from '../reasoning-effort'
+export { type ReasoningEffort } from '../reasoning-effort'
 
 const JsonPrimitiveSchema = z.union([z.string(), z.number().finite(), z.boolean(), z.null()])
 export const JsonValueSchema: z.ZodType<unknown> = z.lazy(() => z.union([
@@ -23,6 +25,7 @@ export const ProviderErrorCodeSchema = z.enum([
 ])
 
 export const ProviderConfigSchema = z.object({
+  reasoningEffort: ReasoningEffortSchema.optional(),
   id: UUIDv7Schema,
   name: z.string().min(1).max(256),
   kind: ProviderKindSchema,
@@ -131,6 +134,7 @@ export type ToolCall = z.infer<typeof ToolCallSchema>
 export type NormalizedStopReason = z.infer<typeof NormalizedStopReasonSchema>
 
 export const ProviderConfigInputSchema = z.object({
+  reasoningEffort: ReasoningEffortSchema.optional(),
   id: UUIDv7Schema.optional(),
   name: z.string().min(1).max(256),
   kind: ProviderKindSchema,
@@ -152,6 +156,7 @@ export const ProviderSecretsInputSchema = z.object({
 }).strict()
 
 export const ProviderConfigDTOSchema = z.object({
+  reasoningEffort: ReasoningEffortSchema.optional(),
   id: UUIDv7Schema,
   name: z.string().min(1).max(256),
   kind: ProviderKindSchema,

@@ -57,7 +57,7 @@ test('Enter sends once, Shift+Enter inserts a newline, and composition does not 
     await expect(input).toHaveValue('')
     expect(server.requests).toHaveLength(2)
     await input.fill('Existing shortcut')
-    await input.press('Meta+Enter')
+    await input.press('ControlOrMeta+Enter')
     await expect(page.locator('#agent-message-log .user')).toHaveCount(2)
     await expect(page.locator('#agent-task-status')).toHaveText('Suggestion only')
     expect(server.requests).toHaveLength(3)

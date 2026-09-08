@@ -38,7 +38,7 @@ test('creates safely, rejects collisions, undoes clean creation, and reports man
     expect(generated).toContain('## Storage')
     expect(generated).toContain('## Safety')
     expect(await readFile(join(workspace, 'requirements.md'), 'utf8')).toBe(requirementsBefore)
-    await page.locator('#file-toggle-btn').click()
+    await expect(page.locator('#file-list')).toBeVisible()
     await expect(page.locator('#file-list')).toContainText('technical-design.md')
 
     await newConversation(page)

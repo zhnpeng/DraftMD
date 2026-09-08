@@ -9,7 +9,7 @@ import {
 import { createOpenAICompatibleAdapter } from '../../../src/main/providers/openai-compatible/openai-compatible-adapter'
 import { toolDefinitions } from '../../../src/main/agent/tools/definitions'
 import { parseToolCall } from '../../../src/main/agent/tools/schemas'
-import { toOpenAITools } from '../../../src/main/providers/openai/openai-messages'
+import { toOpenAIMessages, toOpenAITools } from '../../../src/main/providers/openai/openai-messages'
 
 const request: ProviderRequest = {
   system: 'Markdown only.',
@@ -38,6 +38,39 @@ async function collect(adapter: OpenAIAdapter, signal = new AbortController().si
 }
 
 describe('OpenAIAdapter', () => {
+  it.each(['default', 'none', 'high'] as const)('passes native OpenAI effort %s without treating default as an API value', async reasoningEffort => {
+    const create = vi.fn().mockImplementation(async () => chunks([
+      chunk({ choices: [{ index: 0, delta: { content: 'Done' }, finish_reason: 'stop' }] }),
+    ]))
+    const adapter = await createOpenAIAdapter({ apiKey: 'fixture', model: 'gpt-5.6-sol', timeoutMs: 5000, apiMode: 'chat-completions', reasoningEffort },
+      async () => ({ ...OpenAI, default: vi.fn(function () { return { chat: { completions: { create } } } }) }) as never)
+    for await (const _ of adapter.stream(request, new AbortController().signal)) { /* consume */ }
+    if (reasoningEffort === 'default') expect(create.mock.calls[0][0]).not.toHaveProperty('reasoning_effort')
+    else expect(create.mock.calls[0][0]).toHaveProperty('reasoning_effort', reasoningEffort)
+  })
+
+  it('replays compatible reasoning through tool rounds without showing it as text', async () => {
+    const create = vi.fn().mockImplementation(async () => chunks([
+      chunk({ choices: [{ index: 0, delta: { reasoning_content: 'private reasoning' }, finish_reason: null }] }),
+      chunk({ choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: 'call-read', type: 'function', function: { name: 'read_markdown', arguments: '{"path":"a.md"}' } }] }, finish_reason: 'tool_calls' }] }),
+    ]))
+    const adapter = new OpenAIAdapter({ chat: { completions: { create } } }, {
+      kind: 'openai-compatible', model: 'deepseek-v4-pro', baseUrl: 'http://127.0.0.1/v1', timeoutMs: 5000, toolsEnabled: true, reasoningEffort: 'max',
+    }, OpenAI)
+    const events = await collect(adapter)
+    expect(events.filter(event => event.type === 'text-delta')).toEqual([])
+    const completed = events.find(event => event.type === 'completed')!
+    expect(completed.assistantMessage.providerData).toMatchObject({ reasoningContent: 'private reasoning' })
+    const continuation: ProviderRequest = { ...request, messages: [...request.messages, completed.assistantMessage,
+      { role: 'user', provider: null, providerData: null, content: [{ type: 'tool-result', callId: 'call-read', content: '# A', isError: false }] },
+    ] }
+    expect(toOpenAIMessages(continuation).find(message => message.role === 'assistant')).not.toHaveProperty('reasoning_content')
+    for await (const _ of adapter.stream(continuation, new AbortController().signal)) { /* consume */ }
+    expect(create.mock.calls[1][0]).toMatchObject({ reasoning_effort: 'max', messages: expect.arrayContaining([
+      expect.objectContaining({ role: 'assistant', reasoning_content: 'private reasoning', tool_calls: expect.arrayContaining([expect.objectContaining({ id: 'call-read' })]) }),
+    ]) })
+  })
+
   it('encodes every actual workspace tool as a strict schema without changing local optional arguments', () => {
     const original = structuredClone(toolDefinitions)
     const tools = toOpenAITools(toolDefinitions)

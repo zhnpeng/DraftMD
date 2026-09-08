@@ -6,7 +6,7 @@ DraftMD is derived from [ColaMD](https://github.com/marswaveai/ColaMD). Preserve
 
 ## Development setup
 
-DraftMD requires macOS and Node.js 22.12 or newer.
+DraftMD requires Node.js 22.12 or newer. Development targets macOS and the new Windows x64 candidate. See [Windows build and acceptance](docs/windows.md); published releases remain macOS-only until Windows validation is complete.
 
 ```bash
 npm install
@@ -31,6 +31,8 @@ npm run check:theme-colors
 ```
 
 Some Electron, packaging, Keychain, and platform checks require macOS or additional local setup. State clearly in the pull request which checks were run and which were unavailable.
+
+The separate `Windows / Windows x64 candidate` workflow runs platform/native/workspace tests, a real OS credential round-trip, unsigned NSIS/ZIP builds and a focused packaged desktop suite. It uploads candidates without publishing releases. macOS-only performance budgets and historical POSIX fixtures are not advertised as a validated Windows full-suite gate.
 
 The `CI / macOS checks` job runs these gates on ordinary branch pushes and pull requests using macOS and Node.js 24. It cancels superseded runs for the same PR or ref and retains failed-run diagnostics for seven days. It does not package, sign, or publish the app. Release jobs remain in the separate release workflow. Repository administrators can select this check for branch protection after it has run; adding the workflow alone does not configure protection rules.
 

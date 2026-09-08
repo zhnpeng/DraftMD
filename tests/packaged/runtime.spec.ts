@@ -6,6 +6,23 @@ import { createServer } from 'node:http'
 import { once } from 'node:events'
 import { launchDraftMD, resolveTestApplication } from '../helpers/electron-app'
 
+test('loads SQLite and the OS credential module from packaged resources', async () => {
+  const app = await launchDraftMD({ locale: 'en' })
+  try {
+    expect(await app.evaluate(() => {
+      const { createRequire } = process.getBuiltinModule('module')
+      const { join } = process.getBuiltinModule('path')
+      const require = createRequire(join(process.resourcesPath, 'runtime-entry.cjs'))
+      const Database = require('better-sqlite3')
+      const { AsyncEntry } = require('@napi-rs/keyring')
+      const db = new Database(':memory:')
+      try {
+        return { query: db.prepare('SELECT 42 AS value').get().value, credentialEntry: typeof AsyncEntry }
+      } finally { db.close() }
+    })).toEqual({ query: 42, credentialEntry: 'function' })
+  } finally { await app.cleanup() }
+})
+
 test('the production app itself ignores a development renderer URL', async () => {
   const profile = await realpath(await mkdtemp(join(tmpdir(), 'draftmd-production-renderer-')))
   let requests = 0

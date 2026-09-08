@@ -68,6 +68,11 @@ export async function bootstrapRenderer(api: DraftMDAPI = window.draftmd): Promi
   applyLocale(detectLocale(navigator.language))
   const appBootstrap = await new Promise<Parameters<Parameters<DraftMDAPI['onAppBootstrap']>[0]>[0]>((resolve) => subscriptions.push(api.onAppBootstrap(resolve)))
   applyLocale(appBootstrap.locale)
+  document.documentElement.dataset.platform = appBootstrap.platform
+  if (appBootstrap.platform === 'win32') {
+    const shortcut = document.querySelector<HTMLElement>('[data-i18n="files.toggleShortcut"]')
+    if (shortcut) shortcut.textContent = msg('files.toggleShortcutWindows')
+  }
   applyTheme(loadSavedTheme())
   applyEditorFont(loadSavedEditorFont())
 
@@ -163,7 +168,7 @@ export async function bootstrapRenderer(api: DraftMDAPI = window.draftmd): Promi
     api.onOpenProviderSettings(() => { void providerSettings.show() }),
     api.onFocusAgentDock(() => agentDock.dock.focusInput()),
     api.onToggleFilePanel(() => filePanel.toggle()), api.onToggleSourceMode(() => { source.toggle(); updateWordCount(wordCountElement, source.currentContent(), source.isReducedRendering()); filePanel.scheduleOutlineUpdate() }),
-    api.onWorkspaceOpened((workspace) => { currentWorkspaceId = workspace.id; void filePanel.refresh(); void agentDock.refreshWorkspace(workspace.id) }),
+    api.onWorkspaceOpened((workspace) => { currentWorkspaceId = workspace.id; void filePanel.workspaceOpened(); void agentDock.refreshWorkspace(workspace.id) }),
     api.onWorkspaceFilesChanged(() => { void filePanel.refresh() }),
     api.onMenuOpen(() => { void api.openFile() }),
     api.onMenuSave(() => { void documentController.flushSave() }), api.onMenuSaveAs(() => { void documentController.saveAs() }),

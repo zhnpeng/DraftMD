@@ -1,10 +1,16 @@
-import { dialog } from 'electron'
+import { dialog, shell } from 'electron'
 import { execFile } from 'node:child_process'
 import { DEFAULT_APP_SCRIPT, formatDefaultAppResultDetails, logDefaultAppExecFailure, parseDefaultAppResults } from '../default-app'
 import { t, type Locale } from '../../shared/i18n'
 
-export function setAsDefaultApp(locale: () => Locale): void {
-  if (process.platform !== 'darwin') {
+export function setAsDefaultApp(locale: () => Locale, platform: NodeJS.Platform = process.platform): void {
+  if (platform === 'win32') {
+    void shell.openExternal('ms-settings:defaultapps').catch(() => {
+      void dialog.showMessageBox({ type: 'error', message: t(locale(), 'defaultApp.failed'), detail: t(locale(), 'defaultApp.failedDetail') })
+    })
+    return
+  }
+  if (platform !== 'darwin') {
     void dialog.showMessageBox({ type: 'info', message: t(locale(), 'defaultApp.macOnly') })
     return
   }

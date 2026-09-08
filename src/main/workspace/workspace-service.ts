@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import {
   chmod,
+  lstat,
   mkdir,
   open,
   readFile,
@@ -132,6 +133,17 @@ async function readVersioned(path: string): Promise<{ bytes: Buffer; version: st
   return { bytes, version: fileVersion(bytes) }
 }
 
+async function isSameRegularFile(left: string, right: string): Promise<boolean> {
+  const [leftIdentity, rightIdentity] = await Promise.all([stat(left), lstat(right)])
+  return !rightIdentity.isSymbolicLink()
+    && leftIdentity.isFile()
+    && rightIdentity.isFile()
+    && leftIdentity.nlink === 1
+    && rightIdentity.nlink === 1
+    && leftIdentity.dev === rightIdentity.dev
+    && leftIdentity.ino === rightIdentity.ino
+}
+
 export function createWorkspaceService(
   root: WorkspaceRoot,
   dependencies: WorkspaceServiceDependencies = {},
@@ -189,16 +201,21 @@ export function createWorkspaceService(
       if (current.version !== expectedVersion) throw new WorkspaceServiceError('VERSION_CONFLICT')
       try {
         await stat(destination.absolutePath)
-        throw new WorkspaceServiceError('FILE_ALREADY_EXISTS')
+        if (!await isSameRegularFile(source.absolutePath, destination.absolutePath)) {
+          throw new WorkspaceServiceError('FILE_ALREADY_EXISTS')
+        }
       } catch (error) {
         if (!isMissingFile(error)) throw error
       }
       await mkdir(dirname(destination.absolutePath), { recursive: true })
       const revalidated = await resolveMarkdownPath(root, to, 'new')
-      const latest = await readVersioned(source.absolutePath)
+      // Re-run the path guard immediately before moving: a newly created hard
+      // link must not turn a previously verified source into an external alias.
+      const latestSource = await resolveMarkdownPath(root, from, 'existing')
+      const latest = await readVersioned(latestSource.absolutePath)
       if (latest.version !== expectedVersion) throw new WorkspaceServiceError('VERSION_CONFLICT')
       try {
-        await renameFile(source.absolutePath, revalidated.absolutePath)
+        await renameFile(latestSource.absolutePath, revalidated.absolutePath)
       } catch (error) {
         if (isFileExists(error)) throw new WorkspaceServiceError('FILE_ALREADY_EXISTS')
         throw error

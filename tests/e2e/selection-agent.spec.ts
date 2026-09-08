@@ -31,7 +31,7 @@ test('rejects a stale source selection before contacting the task provider', asy
       element.focus()
       element.setSelectionRange(start, start + 'target'.length)
     })
-    await page.keyboard.press('Meta+Shift+J')
+    await page.keyboard.press('ControlOrMeta+Shift+J')
     await expect(page.locator('#agent-selection-chip')).toContainText('target')
 
     await writeFile(join(app.userDataPath, 'notes.md'), external)
@@ -61,7 +61,7 @@ test('captures exact formatted Markdown from a visual editor selection', async (
     await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2, { steps: 8 })
     await page.mouse.up()
     await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe('target')
-    await page.keyboard.press('Meta+Shift+J')
+    await page.keyboard.press('ControlOrMeta+Shift+J')
     await expect(page.locator('#agent-selection-chip')).toContainText('**target**')
     await expect(page.locator('#agent-selection-chip')).toContainText('Product')
   } finally { await app.cleanup() }

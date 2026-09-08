@@ -16,7 +16,7 @@ Each candidate needs a concrete user workflow and validation criteria before ent
 - Word and shareable image export.
 - Custom theme import and a broader preferences/keybinding system.
 - Multiple document windows as a supported product workflow.
-- Windows, Linux, iOS, and Web applications.
+- Linux, Windows ARM, iOS, and Web applications. Windows x64 has moved to [candidate implementation and validation](windows.md).
 - Cloud synchronization, collaborative editing, knowledge-base management, and tags.
 - Shell execution, web browsing, and MCP tools for the Agent.
 

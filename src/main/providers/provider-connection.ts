@@ -2,6 +2,7 @@ import { providerApiMode, type ProviderConfig } from '../../shared/contracts/pro
 
 export function sameProviderConnection(left: ProviderConfig, right: ProviderConfig): boolean {
   if (providerApiMode(left) !== providerApiMode(right)) return false
+  if ((left.reasoningEffort ?? 'default') !== (right.reasoningEffort ?? 'default')) return false
   const fields = [
     'kind', 'preset', 'baseUrl', 'model', 'credentialRef', 'timeoutMs',
     'streamEnabled', 'toolsEnabled', 'insecureHttpApproved',

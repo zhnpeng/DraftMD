@@ -7,9 +7,13 @@ import {
   KEYRING_PACKAGES,
   findSymlinks,
   lockedPackage,
+  nativeCopiesForTarget,
+  nativeTarget,
+  parseTargetArguments,
   runtimeClosure,
   runtimePackageRoots,
   stageLegalNotices,
+  stagedPackageMetadata,
   verifyIntegrity,
 } from '../../../scripts/prepare-native-packages.js'
 
@@ -20,6 +24,7 @@ describe('Universal native package preparation', () => {
     expect(KEYRING_PACKAGES).toEqual([
       '@napi-rs/keyring-darwin-arm64',
       '@napi-rs/keyring-darwin-x64',
+      '@napi-rs/keyring-win32-x64-msvc',
     ])
     for (const name of KEYRING_PACKAGES) {
       const item = lockedPackage(lock, name)
@@ -27,6 +32,20 @@ describe('Universal native package preparation', () => {
       expect(item.resolved).toMatch(/^https:\/\/registry\.npmjs\.org\//)
       expect(item.integrity).toMatch(/^sha512-/)
     }
+  })
+
+  it('selects the locked Windows x64 keyring binary without staging Darwin binaries', () => {
+    const target = nativeTarget('win32', 'x64')
+    expect(parseTargetArguments(['--platform', 'win32', '--arch=x64'])).toEqual(target)
+    expect(nativeCopiesForTarget(target).map(([, destination]) => destination)).toEqual([
+      'better-sqlite3/lib',
+      'better-sqlite3/package.json',
+      'better-sqlite3/prebuilds/win32-x64.node',
+      '@napi-rs/keyring/index.js',
+      '@napi-rs/keyring/package.json',
+      '@napi-rs/keyring-win32-x64-msvc',
+    ])
+    expect(() => nativeTarget('win32', 'arm64')).toThrow(/unsupported native package target/i)
   })
 
   it('accepts exact SRI bytes and rejects tampering', () => {
@@ -61,8 +80,8 @@ it('builds an empty runtime closure from a clean fixture with no runtime package
 it('detects symlinks in a clean runtime fixture', () => {
   const root = mkdtempSync(join(tmpdir(), 'draftmd-runtime-links-'))
   try {
-    writeFileSync(join(root, 'target'), 'target')
-    symlinkSync('target', join(root, 'link'))
+    mkdirSync(join(root, 'target'))
+    symlinkSync(join(root, 'target'), join(root, 'link'), process.platform === 'win32' ? 'junction' : 'dir')
     expect(findSymlinks(root)).toEqual([join(root, 'link')])
   } finally { rmSync(root, { recursive: true, force: true }) }
 })
@@ -85,4 +104,12 @@ it('stages the project license and attribution from a clean fixture', () => {
     expect(readFileSync(join(packageRoot, 'LICENSE'), 'utf8')).toBe('license text\n')
     expect(readFileSync(join(packageRoot, 'NOTICE.md'), 'utf8')).toBe('notice text\n')
   } finally { rmSync(root, { recursive: true, force: true }) }
+})
+
+it('preserves repository metadata required by electron-updater in the staged package', () => {
+  const staged = stagedPackageMetadata(JSON.parse(readFileSync('package.json', 'utf8')))
+  expect(staged.repository).toEqual({
+    type: 'git',
+    url: 'https://github.com/zhnpeng/DraftMD.git',
+  })
 })

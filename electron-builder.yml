@@ -48,3 +48,20 @@ mac:
   notarize: true
   singleArchFiles: 'node_modules/{better-sqlite3/prebuilds,@napi-rs/keyring-darwin-*}/**/*'
   x64ArchFiles: 'Contents/Resources/node_modules/{better-sqlite3/prebuilds,@napi-rs/keyring-darwin-*}/**/*'
+
+win:
+  artifactName: '${productName}-${version}-win-${arch}.${ext}'
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: zip
+      arch:
+        - x64
+  icon: icon.png
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+publish: null

@@ -35,6 +35,14 @@ it('accepts one Markdown launch path inside the canonical temp root', () => {
   })).toBe('/private/tmp/workspace-b/notes.md')
 })
 
+it('launches an unpacked Windows executable without appending macOS bundle paths', () => {
+  const executable = join(process.cwd(), 'release', 'win-unpacked', 'DraftMD.exe')
+  expect(resolveTestApplication('/private/tmp/profile', executable)).toEqual({
+    executablePath: executable,
+    args: ['--user-data-dir=/private/tmp/profile'],
+  })
+})
+
 it('rejects ambiguous, non-Markdown, and out-of-temp launch paths', () => {
   expect(() => resolveTestLaunchDocument('/private/tmp/app', {
     documentName: 'a.md', documentPath: '/private/tmp/b.md', tempRoot: '/private/tmp',

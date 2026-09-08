@@ -40,6 +40,7 @@ export function createWorkspaceNavigation(input: {
 
 export interface FilePanelController {
   refresh(): Promise<void>
+  workspaceOpened(): Promise<void>
   render(files: SiblingFile[]): void
   toggle(): void
   scheduleOutlineUpdate(): void
@@ -159,8 +160,11 @@ export function createFilePanelController(input: {
     openWorkspaceFile: (path) => input.api.openWorkspaceFile(path),
     beforeOpenFile: input.beforeOpenFile,
   })
-  const refresh = async (): Promise<void> => {
-    const files = await navigation.refresh()
+  let refreshGeneration = 0
+  const refresh = async (reset = false): Promise<void> => {
+    const generation = ++refreshGeneration
+    const files = await (reset ? navigation.workspaceOpened() : navigation.refresh())
+    if (generation !== refreshGeneration) return
     workspaceFiles = files
     if (files) render(files)
   }
@@ -194,7 +198,14 @@ export function createFilePanelController(input: {
   updateVisibility()
 
   return {
-    refresh, render, toggle, scheduleOutlineUpdate, updateVisibility,
+    refresh,
+    workspaceOpened() {
+      manualHidden = false
+      localStorage.setItem('file-panel-hidden', '0')
+      setMode('files')
+      return refresh(true)
+    },
+    render, toggle, scheduleOutlineUpdate, updateVisibility,
     dispose() {
       input.fileListElement.removeEventListener('click', handleFileClick)
       input.toggleButton.removeEventListener('click', onToggle)

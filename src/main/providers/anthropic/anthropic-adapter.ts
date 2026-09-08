@@ -5,6 +5,7 @@ import type { ProviderAdapter } from '../provider-adapter'
 import { ProviderError } from '../provider-errors'
 import { normalizeAnthropicError, type AnthropicSDKModule } from './anthropic-errors'
 import { toAnthropicMessages, toAnthropicTools } from './anthropic-messages'
+import { explicitReasoningEffort, type ReasoningEffort } from '../../../shared/reasoning-effort'
 
 export interface AnthropicStreamBoundary {
   on<Event extends 'text'>(event: Event, listener: MessageStreamEvents[Event]): this
@@ -19,6 +20,7 @@ export interface AnthropicClientBoundary {
 }
 
 export interface AnthropicAdapterConfig {
+  reasoningEffort?: ReasoningEffort
   model: string
   baseUrl: string
   timeoutMs: number
@@ -68,6 +70,7 @@ export class AnthropicAdapter implements ProviderAdapter {
         messages: toAnthropicMessages(request.messages),
         tools: toAnthropicTools(request.tools),
         ...(supportsAdaptiveThinking(this.config.model) ? { thinking: { type: 'adaptive' } } : {}),
+        ...(explicitReasoningEffort(this.config.reasoningEffort) ? { output_config: { effort: explicitReasoningEffort(this.config.reasoningEffort) } } : {}),
       } as unknown as Anthropic.MessageStreamParams
       sdkStream = this.client.messages.stream(body, { signal: abortController.signal })
       const queue = new TextQueue()

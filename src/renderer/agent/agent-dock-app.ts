@@ -1,4 +1,5 @@
 import type { DraftMDAPI, TaskEvent } from '../../shared/contracts'
+import { isPrimaryModifier } from '../../shared/platform'
 import type { SelectionReference } from '../../shared/contracts/agent'
 import { messages, msg, type MessageKey } from '../../shared/i18n'
 import type { DocumentControllerActions } from '../app/document-controller'
@@ -363,7 +364,7 @@ export function createAgentDockApp(input: {
   }
   const selectionShortcut = (event: KeyboardEvent): void => {
     if (event.key === 'Escape') closeMenus()
-    if (event.metaKey && event.shiftKey && event.key.toLowerCase() === 'j') { event.preventDefault(); void captureSelection() }
+    if (isPrimaryModifier(event, document.documentElement.dataset.platform ?? 'darwin') && event.shiftKey && event.key.toLowerCase() === 'j') { event.preventDefault(); void captureSelection() }
   }
   const outsideMenus = (event: PointerEvent): void => {
     const target = event.target as Node

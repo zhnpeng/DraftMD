@@ -40,7 +40,7 @@ test('recovers a partial task without a provider and allows viewing and undoing 
   })
   try {
     const page = await app.windowMatching(async (candidate) => await candidate.locator('#file-title').textContent().catch(() => '') === 'spec.md')
-    await page.keyboard.press('Meta+J')
+    await expect(page.locator('#agent-dock-expanded')).toBeVisible()
     await expect(page.locator('#agent-recovery-panel')).toContainText('Previous task interrupted')
     await expect(page.locator('#agent-approval-panel')).toBeHidden()
     await page.locator('#agent-recovery-panel').getByRole('button', { name: 'View changes' }).click()

@@ -1,3 +1,5 @@
+import { isPrimaryModifier } from '../../shared/platform'
+
 export function createAgentDockState(input: { viewportWidth: number; storedWidth: number | null }) {
   const clamp = (next: number, viewportWidth: number): number => Math.min(640, Math.floor(viewportWidth / 2), Math.max(300, next))
   let width = clamp(input.storedWidth ?? 360, input.viewportWidth)
@@ -83,7 +85,7 @@ export function createAgentDockController(input: {
     if (event.isComposing || event.keyCode === 229) return
     if (event.key === 'Escape' && document.activeElement === input.textarea && collapse()) { event.preventDefault(); return }
     if (event.key === 'Enter' && !event.shiftKey && document.activeElement === input.textarea) { event.preventDefault(); if (!event.repeat) void send(); return }
-    if (event.key.toLowerCase() === 'j' && event.metaKey && !event.shiftKey) { event.preventDefault(); state.expanded ? collapse() : focusInput() }
+    if (event.key.toLowerCase() === 'j' && isPrimaryModifier(event, document.documentElement.dataset.platform ?? 'darwin') && !event.shiftKey) { event.preventDefault(); state.expanded ? collapse() : focusInput() }
   }
   const applyWidth = (width: number): void => {
     render()

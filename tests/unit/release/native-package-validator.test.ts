@@ -1,10 +1,25 @@
 import { describe, expect, it, vi } from 'vitest'
-import { validatePackagedNativeModules } from '../../../scripts/afterPack.js'
+import { join } from 'node:path'
+import { peArchitecture, validatePackagedNativeModules } from '../../../scripts/afterPack.js'
 
-const app = '/release/DraftMD.app'
+const app = join('release', 'DraftMD.app')
+const winApp = join('release', 'win-unpacked')
 
 function path(name: string): string {
-  return `${app}/Contents/Resources/node_modules/${name}`
+  return join(app, 'Contents', 'Resources', 'node_modules', name)
+}
+
+function winPath(name: string): string {
+  return join(winApp, 'resources', 'node_modules', name)
+}
+
+function pe(machine: number): Buffer {
+  const bytes = Buffer.alloc(0x90)
+  bytes.write('MZ')
+  bytes.writeUInt32LE(0x80, 0x3c)
+  bytes.write('PE\0\0', 0x80)
+  bytes.writeUInt16LE(machine, 0x84)
+  return bytes
 }
 
 describe('packaged native module validator', () => {
@@ -48,5 +63,26 @@ describe('packaged native module validator', () => {
     const exists = vi.fn(() => true)
     expect(() => validatePackagedNativeModules({ appPath: app, arch: 'x64', exists, architectures: () => ['arm64'] }))
       .toThrow(/expected x64.*found arm64/i)
+  })
+
+  it('validates Windows x64 native module paths and PE machine headers', () => {
+    const required = [
+      winPath('better-sqlite3/lib/index.js'),
+      winPath('better-sqlite3/prebuilds/win32-x64.node'),
+      winPath('@napi-rs/keyring/index.js'),
+      winPath('@napi-rs/keyring-win32-x64-msvc/keyring.win32-x64-msvc.node'),
+    ]
+    const exists = vi.fn((candidate: string) => required.includes(candidate))
+    const nativeArchitecture = vi.fn(() => 'x64')
+    expect(validatePackagedNativeModules({
+      appPath: winApp, platform: 'win32', arch: 'x64', exists, nativeArchitecture,
+    })).toEqual(required)
+    expect(nativeArchitecture).toHaveBeenCalledTimes(2)
+  })
+
+  it('reads x64 PE headers and rejects non-PE binaries', () => {
+    expect(peArchitecture('/fixture/addon.node', () => pe(0x8664))).toBe('x64')
+    expect(peArchitecture('/fixture/addon.node', () => pe(0xaa64))).toBe('arm64')
+    expect(() => peArchitecture('/fixture/addon.node', () => Buffer.from('not a PE'))).toThrow(/not a PE/i)
   })
 })

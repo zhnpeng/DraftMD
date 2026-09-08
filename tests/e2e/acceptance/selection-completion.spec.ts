@@ -17,7 +17,7 @@ async function captureErrorSelection(page: import('@playwright/test').Page): Pro
     element.focus()
     element.setSelectionRange(start, start + selected.length)
   })
-  await page.keyboard.press('Meta+Shift+J')
+  await page.keyboard.press('ControlOrMeta+Shift+J')
   const chip = page.locator('#agent-selection-chip')
   await expect(chip).toContainText('target.md')
   await expect(chip).toContainText('Service Design')

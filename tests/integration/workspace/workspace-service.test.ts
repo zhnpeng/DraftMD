@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { chmod, link, mkdtemp, mkdir, readFile, readdir, stat, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
@@ -111,6 +111,50 @@ describe('versioned Markdown CRUD', () => {
     expect(await readFile(join(directory, 'new.md'), 'utf8')).toBe('# Old\n')
   })
 
+  it('permits a case-only rename without treating the source as an occupied destination', async () => {
+    const { directory, service } = await setupWorkspace({ 'Readme.md': '# Readme\n' })
+    const before = await service.read('Readme.md')
+
+    await expect(service.rename('Readme.md', 'README.md', before.version)).resolves.toEqual({
+      from: 'Readme.md',
+      to: 'README.md',
+      version: before.version,
+    })
+    expect(await readFile(join(directory, 'README.md'), 'utf8')).toBe('# Readme\n')
+  })
+
+  it.runIf(process.platform === 'win32')('updates the physical spelling for a Windows case-only rename', async () => {
+    const { directory, service } = await setupWorkspace({ 'Readme.md': '# Readme\n' })
+    const before = await service.read('Readme.md')
+
+    await service.rename('Readme.md', 'README.md', before.version)
+
+    expect(await readdir(directory)).toContain('README.md')
+    expect(await readdir(directory)).not.toContain('Readme.md')
+  })
+
+  it.runIf(process.platform !== 'win32')('does not treat a symlink to the source as a case-only rename destination', async () => {
+    const { directory, service } = await setupWorkspace({ 'source.md': '# Source\n' })
+    await symlink('source.md', join(directory, 'alias.md'))
+    const before = await service.read('source.md')
+
+    await expect(service.rename('source.md', 'alias.md', before.version)).rejects.toMatchObject({
+      code: 'FILE_ALREADY_EXISTS',
+    })
+    expect(await readFile(join(directory, 'source.md'), 'utf8')).toBe('# Source\n')
+  })
+
+  it.runIf(process.platform === 'win32')('rejects a hard-linked source before a case-only rename can overwrite it', async () => {
+    const { directory, service } = await setupWorkspace({ 'Readme.md': '# Readme\n' })
+    await link(join(directory, 'Readme.md'), join(directory, 'alias.md'))
+
+    await expect(service.rename('Readme.md', 'README.md', 'any-version')).rejects.toMatchObject({
+      code: 'PATH_OUTSIDE_WORKSPACE',
+    })
+    expect(await readFile(join(directory, 'Readme.md'), 'utf8')).toBe('# Readme\n')
+    expect(await readFile(join(directory, 'alias.md'), 'utf8')).toBe('# Readme\n')
+  })
+
   it('deletes only the expected version', async () => {
     const { directory, service } = await setupWorkspace({ 'old.md': '# Old\n' })
     const before = await service.read('old.md')
@@ -125,7 +169,7 @@ describe('versioned Markdown CRUD', () => {
 
   it('inherits the destination mode and leaves no temp artifact after an atomic replacement', async () => {
     const { directory, service } = await setupWorkspace({ 'spec.md': '# Old\n' })
-    await chmod(join(directory, 'spec.md'), 0o640)
+    if (process.platform !== 'win32') await chmod(join(directory, 'spec.md'), 0o640)
     const before = await service.read('spec.md')
 
     await service.edit('spec.md', {
@@ -134,7 +178,7 @@ describe('versioned Markdown CRUD', () => {
       expectedOccurrences: 1,
     }, before.version)
 
-    expect((await stat(join(directory, 'spec.md'))).mode & 0o777).toBe(0o640)
+    if (process.platform !== 'win32') expect((await stat(join(directory, 'spec.md'))).mode & 0o777).toBe(0o640)
     expect((await readdir(directory)).filter((name) => name.includes('draftmd-tmp'))).toEqual([])
   })
 

@@ -5,6 +5,7 @@ import { ProviderError } from '../provider-errors'
 import type { OpenAIAdapterConfig } from './openai-adapter'
 import { normalizeOpenAIError, type OpenAISDKModule } from './openai-errors'
 import { normalizeOptionalToolArguments, toResponsesInput, toResponsesTools } from './openai-messages'
+import { explicitReasoningEffort } from '../../../shared/reasoning-effort'
 
 export class ResponsesAdapter implements ProviderAdapter {
   constructor(private readonly client: Pick<OpenAI, 'responses'>, private readonly config: OpenAIAdapterConfig, private readonly sdk: OpenAISDKModule) {}
@@ -22,6 +23,7 @@ export class ResponsesAdapter implements ProviderAdapter {
       stream = this.client.responses.stream({
         model: this.config.model, instructions: request.system, input: toResponsesInput(request),
         store: false, include: ['reasoning.encrypted_content'], max_output_tokens: request.maxOutputTokens,
+        ...(explicitReasoningEffort(this.config.reasoningEffort) ? { reasoning: { effort: explicitReasoningEffort(this.config.reasoningEffort) } } : {}),
         tools: this.config.toolsEnabled ? toResponsesTools(request.tools) : undefined,
       }, { signal })
       let streamedText = ''

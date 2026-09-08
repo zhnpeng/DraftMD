@@ -1,7 +1,7 @@
 import { _electron as electron, type ElectronApplication, type Page } from 'playwright'
 import { mkdtemp, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const projectRoot = process.cwd()
@@ -9,9 +9,9 @@ const mainEntry = join(projectRoot, 'dist/main/index.js')
 
 export function resolveTestApplication(userDataPath: string, packagedApp?: string): { executablePath: string; args: string[] } {
   if (packagedApp) {
-    if (!packagedApp.endsWith('.app')) throw new Error('DRAFTMD_PACKAGED_APP must point to a .app bundle')
+    if (!packagedApp.endsWith('.app') && !packagedApp.endsWith('.exe')) throw new Error('DRAFTMD_PACKAGED_APP must point to a .app bundle or unpacked .exe')
     return {
-      executablePath: join(resolve(packagedApp), 'Contents/MacOS/DraftMD'),
+      executablePath: packagedApp.endsWith('.exe') ? resolve(packagedApp) : join(resolve(packagedApp), 'Contents/MacOS/DraftMD'),
       args: [`--user-data-dir=${userDataPath}`],
     }
   }
@@ -133,7 +133,8 @@ export async function launchDraftMD(options: LaunchDraftMDOptions = {}): Promise
     const windowMatching = async (predicate: (page: Page) => boolean | Promise<boolean>): Promise<Page> => {
       const page = await findMatchingWindow(() => app!.windows(), predicate)
       if (packagedApp) {
-        const insideBundle = relative(join(packagedApp, 'Contents/Resources'), fileURLToPath(page.url()))
+        const resources = packagedApp.endsWith('.exe') ? join(dirname(packagedApp), 'resources') : join(packagedApp, 'Contents/Resources')
+        const insideBundle = relative(resources, fileURLToPath(page.url()))
         if (!insideBundle || insideBundle === '..' || insideBundle.startsWith(`..${sep}`) || isAbsolute(insideBundle)) {
           throw new Error('Packaged acceptance must use a renderer inside the selected app bundle')
         }

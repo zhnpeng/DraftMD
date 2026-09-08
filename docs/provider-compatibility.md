@@ -16,7 +16,29 @@ Responses uses the official SDK stream accumulator and strict tool argument pars
 
 DraftMD runs a capability test before labeling a configuration. A provider may be marked **Agent**, **Chat only**, or **Unavailable**. Chat-only providers receive no file tools and cannot modify Markdown. Text that resembles a tool call remains ordinary assistant text.
 
-In the current source tree, changing the provider kind, preset, endpoint, model, transport settings, or credential references clears the previous capability and test metadata. Run the capability test again before using that configuration. Renaming a configuration or changing the default does not invalidate its result. A probe result is discarded if the configuration was deleted or its saved connection no longer matches the tested connection. Concurrent probes for the same connection retain completion-order semantics.
+In the current source tree, changing the provider kind, preset, endpoint, model, reasoning effort, transport settings, or credential references clears the previous capability and test metadata. Run the capability test again before using that configuration. Renaming a configuration or changing the default does not invalidate its result. A probe result is discarded if the configuration was deleted or its saved connection no longer matches the tested connection. Concurrent probes for the same connection retain completion-order semantics.
+
+## Reasoning Effort (Current Source)
+
+Model settings offer a per-configuration **Reasoning effort** selector for known supporting models. **Provider default** omits the effort parameter and preserves existing behavior, including automatic adaptive thinking on previously supported Claude models. Older saved configurations load with this default. Selecting **None**, where available, explicitly disables reasoning; it is different from the provider default.
+
+| Model | Available explicit levels |
+| --- | --- |
+| GPT-6 Astra | low, medium, high, xhigh, max |
+| GPT-5.6 / Sol / Terra / Luna | none, low, medium, high, xhigh, max |
+| GPT-5.2, GPT-5.4, GPT-5.5 | none, low, medium, high, xhigh |
+| Claude Opus 5 / 4.8 / 4.7, Sonnet 5, Fable 5 / 5.1, Mythos 5 / 5.1 | low, medium, high, xhigh, max |
+| Claude Opus 4.6, Sonnet 4.6, Mythos Preview | low, medium, high, max |
+| Claude Opus 4.5 | low, medium, high |
+| DeepSeek V4 Flash / Pro (OpenAI-compatible) | low, high, max; Responses also offers none |
+
+Dated OpenAI and Claude snapshots inherit the listed levels. Unknown model IDs, custom aliases, and unsupported provider/model combinations keep the control hidden; DraftMD does not infer support from an arbitrary model name. Claude effort is available through the Anthropic protocol. A compatible endpoint may reject levels accepted by the original provider, so the selected setting is exercised by the capability test before use.
+
+Responses sends `reasoning.effort`, Chat Completions sends `reasoning_effort`, and Anthropic sends `output_config.effort`. All task rounds use the saved setting. Explicit-effort probes use the same 64,000-token output ceiling as conversations to avoid consuming a small probe budget entirely on reasoning; the ceiling is a limit, not a target. Default probes retain their previous limit. Higher effort can increase latency and token use. No per-message overrides, numeric thinking budgets, or thinking display are included.
+
+OpenAI-compatible Chat Completions preserves returned `reasoning_content` in provider-private conversation data and replays it with tool results, as required by DeepSeek. It is not rendered as assistant text. Provider errors remain visible after testing and reopening settings; private upstream error text is not displayed.
+
+The support table was checked on 2026-09-06 against [OpenAI model guidance](https://developers.openai.com/api/docs/guides/latest-model), [GPT-5.6 Sol](https://developers.openai.com/api/docs/models/gpt-5.6-sol), [Claude effort](https://platform.claude.com/docs/en/build-with-claude/effort), and [DeepSeek thinking mode](https://api-docs.deepseek.com/guides/thinking_mode/). Automated tests verify request shape and local behavior with loopback fixtures; real service acceptance remains model- and endpoint-specific.
 
 Compatibility depends on streaming behavior, tool-call argument fidelity, cancellation, and the selected model—not only on accepting an OpenAI-shaped request. Custom endpoints must be tested individually. Public plain-HTTP endpoints require explicit approval; loopback local HTTP endpoints are allowed for local services.
 

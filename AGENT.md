@@ -20,7 +20,7 @@ DraftMD 是开源的 macOS AI Markdown 编辑器，由 ColaMD 衍生。用户在
 - 文件工具只操作用户选定工作区内允许的 Markdown 文件，必须通过现有路径授权、版本检查和写入流程。
 - 删除文档需要用户审批；Chat only 不提供文件工具。
 - 不向模型提供 shell、网络浏览、MCP 或任意文件系统访问。
-- 模型凭据和秘密请求头保存在 macOS Keychain，不进入 Renderer、SQLite、日志或诊断导出。
+- 模型凭据和秘密请求头保存在系统凭据库（macOS Keychain / Windows Credential Manager），不进入 Renderer、SQLite、日志或诊断导出。
 - 会话、任务和配置元数据保存在本地 SQLite；快照用于 Diff、Undo 和恢复。
 - 启动恢复成功后，仅清理目录修改时间超过 30 天且没有任何任务引用的快照。数据库恢复异常或隔离备份存在时暂停清理。详细规则见 [隐私说明](docs/privacy.md)。
 - 删除会话不删除 Markdown 文档。
@@ -36,7 +36,7 @@ DraftMD 是开源的 macOS AI Markdown 编辑器，由 ColaMD 衍生。用户在
 
 ## 范围限制
 
-当前面向 macOS，不承诺 Windows、Linux、iOS 或 Web 支持。云同步、协作编辑、知识库和标签管理、自定义主题导入、Word/图片导出及多窗口产品体验不属于当前 MVP 的验收范围。保留的上游代码或内部窗口管理能力不等于已支持这些产品功能。自动更新尚未启用。
+当前发布版面向 macOS。经用户授权，源码扩展 Windows x64 候选适配，验收边界见 [Windows 说明](docs/windows.md)。不承诺 Windows ARM、Linux、iOS 或 Web 支持。云同步、协作编辑、知识库和标签管理、自定义主题导入、Word/图片导出及多窗口产品体验不属于当前范围。保留的上游代码不等于已支持这些产品功能。自动更新尚未启用。
 
 ## 技术结构
 

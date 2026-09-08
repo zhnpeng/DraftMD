@@ -15,7 +15,7 @@ export function createDefaultBrowsePathResolver(input: {
   existsSync(path: string): boolean
 }): () => string | null {
   return () => {
-    if ((input.platform ?? 'darwin') !== 'darwin') return null
+    if (!['darwin', 'win32'].includes(input.platform ?? process.platform)) return null
     const documents = input.getPath('documents')
     if (input.existsSync(documents)) return documents
     const desktop = input.getPath('desktop')

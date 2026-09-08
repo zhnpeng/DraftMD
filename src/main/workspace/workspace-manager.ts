@@ -1,10 +1,17 @@
-import { basename, isAbsolute, join, posix, relative, resolve, sep } from 'node:path'
+import { basename, join, posix, resolve } from 'node:path'
 import { opendir, realpath } from 'node:fs/promises'
 import { watch as watchFileSystem, type FSWatcher } from 'node:fs'
 import type { BrowserWindow } from 'electron'
 import type { SiblingFile, WorkspaceDescriptor } from '../../shared/contracts'
 import { IpcEventSchemas } from '../../shared/contracts'
-import { createWorkspaceRoot, resolveMarkdownPath, WorkspacePathError, type WorkspaceRoot } from './path-guard'
+import {
+  createWorkspaceRoot,
+  isWithinWorkspaceRoot,
+  normalizeWorkspaceDirectory,
+  resolveMarkdownPath,
+  WorkspacePathError,
+  type WorkspaceRoot,
+} from './path-guard'
 import type { RecentWorkspaces } from './recent-workspaces'
 import { workspaceId } from './workspace-id'
 
@@ -41,22 +48,6 @@ function sendWorkspaceEvent(win: BrowserWindow, channel: 'workspace:opened' | 'w
   if (parsed.success && !win.isDestroyed() && !win.webContents.isDestroyed()) {
     win.webContents.send(channel, ...parsed.data)
   }
-}
-
-function logicalDirectory(input: string): string {
-  const normalized = input.normalize('NFC')
-  if (normalized === '') return ''
-  if (normalized.includes('\0') || normalized.includes('\\') || posix.isAbsolute(normalized)
-    || posix.normalize(normalized) !== normalized
-    || normalized.split('/').some((part) => !part || part === '.' || part === '..')) {
-    throw new WorkspacePathError('PATH_OUTSIDE_WORKSPACE')
-  }
-  return normalized
-}
-
-function isWithinRoot(root: string, target: string): boolean {
-  const fromRoot = relative(root, target)
-  return fromRoot === '' || (fromRoot !== '..' && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot))
 }
 
 function isMarkdown(name: string): boolean {
@@ -121,7 +112,7 @@ export function createWorkspaceManager(deps: WorkspaceManagerDependencies): Work
     async list(windowId, input = '') {
       const state = states.get(windowId)
       if (!state) return []
-      const directory = logicalDirectory(input)
+      const directory = normalizeWorkspaceDirectory(input)
       const logicalTarget = directory ? resolve(state.root.canonicalPath, ...directory.split('/')) : state.root.canonicalPath
       let canonicalTarget: string
       try {
@@ -130,7 +121,7 @@ export function createWorkspaceManager(deps: WorkspaceManagerDependencies): Work
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new WorkspacePathError('PATH_NOT_FOUND')
         throw error
       }
-      if (!isWithinRoot(state.root.canonicalPath, canonicalTarget)) throw new WorkspacePathError('PATH_OUTSIDE_WORKSPACE')
+      if (!isWithinWorkspaceRoot(state.root.canonicalPath, canonicalTarget)) throw new WorkspacePathError('PATH_OUTSIDE_WORKSPACE')
 
       const entries = []
       for await (const entry of await opendir(canonicalTarget)) entries.push(entry)

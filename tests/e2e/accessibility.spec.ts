@@ -36,7 +36,10 @@ test('supports keyboard-only foundation flow without clipping at 800x600 in redu
     await expect(page.getByRole('button', { name: 'Switch to Markdown source' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Send task' })).toBeVisible()
 
+    await expect(page.getByRole('tablist', { name: 'Sidebar content' })).toBeVisible()
     await page.getByRole('button', { name: 'Show / hide file list' }).focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('tablist', { name: 'Sidebar content' })).toBeHidden()
     await page.keyboard.press('Enter')
     await expect(page.getByRole('tablist', { name: 'Sidebar content' })).toBeVisible()
     await page.getByRole('tab', { name: 'Outline' }).focus()

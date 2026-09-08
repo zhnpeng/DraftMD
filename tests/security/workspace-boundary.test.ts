@@ -42,6 +42,16 @@ describe('adversarial Markdown workspace boundaries', () => {
     }
   })
 
+  it('rejects an external final symlink when resolving a new destination', async () => {
+    const outside = await mkdtemp(join(tmpdir(), 'draftmd-security-outside-'))
+    const { rootPath, root } = await workspace()
+    await symlink(join(outside, 'missing.md'), join(rootPath, 'linked.md'))
+
+    await expect(resolveMarkdownPath(root, 'linked.md', 'new')).rejects.toMatchObject({
+      code: 'PATH_OUTSIDE_WORKSPACE',
+    })
+  })
+
   it('rejects an in-workspace hard link to content outside the workspace', async () => {
     const outside = await mkdtemp(join(tmpdir(), 'draftmd-security-hardlink-'))
     const secret = join(outside, 'secret.md')

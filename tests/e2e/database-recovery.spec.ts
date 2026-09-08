@@ -23,9 +23,9 @@ test('keeps editing and local sessions usable after malformed SQLite recovery', 
 
     const editor = page.locator('.ProseMirror')
     await editor.click()
-    await page.keyboard.press('Meta+A')
+    await page.keyboard.press('ControlOrMeta+A')
     await page.keyboard.type('Recovered Markdown')
-    await page.keyboard.press('Meta+S')
+    await page.keyboard.press('ControlOrMeta+S')
     await expect.poll(() => readFile(documentPath, 'utf8')).toContain('Recovered Markdown')
 
     const workspaceId = createHash('sha256').update(`draftmd-workspace\0${await realpath(workspace)}`).digest('hex')

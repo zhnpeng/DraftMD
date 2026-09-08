@@ -63,6 +63,25 @@ beforeEach(() => {
 })
 
 describe('WindowManager version coordination', () => {
+  it('reserves loading windows so multi-file launches cannot overwrite each other', async () => {
+    const { manager } = setup()
+    const create = (id: number) => ({
+      id, isDestroyed: () => false, setTitle: vi.fn(), focus: vi.fn(),
+      loadFile: vi.fn(), on: vi.fn(),
+      webContents: { id, isDestroyed: () => false, send: vi.fn(), on: vi.fn() },
+    })
+    const first = create(101)
+    const second = create(102)
+    electron.fromId.mockImplementation(id => id === 101 ? first : second)
+    electron.constructedWindow = first
+    expect(await manager.openFile('/work/first.md')).toBe(first)
+    electron.constructedWindow = second
+    expect(await manager.openFile('/work/second.md')).toBe(second)
+    expect(await manager.openFile('/work/first.md')).toBe(first)
+    expect(second.loadFile).toHaveBeenCalledOnce()
+    manager.dispose(first as never)
+    manager.dispose(second as never)
+  })
   it('passes the active disk version when saving the same path', async () => {
     const { manager, documentService } = setup()
     const win = fakeWindow()

@@ -1,0 +1,56 @@
+name: Windows
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows x64 candidate
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Platform and native package regression tests
+        run: npx vitest run tests/unit/main/windows-platform.test.ts tests/unit/main/menu-updates.test.ts tests/unit/release/native-package-preparation.test.ts tests/unit/release/native-package-validator.test.ts tests/unit/workspace/path-guard.test.ts tests/unit/workspace/recent-workspaces.test.ts tests/integration/workspace/workspace-service.test.ts tests/integration/workspace/symlink-escape.test.ts tests/integration/credentials/keyring.test.ts
+        env:
+          DRAFTMD_RUN_KEYCHAIN_TESTS: '1'
+      - run: npm run check:theme-colors
+      - name: Build unsigned Windows x64 candidate
+        run: npm run dist:win
+      - name: Packaged editor, provider and workspace acceptance
+        run: npm run test:windows
+        env:
+          DRAFTMD_PACKAGED_APP: ${{ github.workspace }}/release/win-unpacked/DraftMD.exe
+      - name: Upload candidate for manual installation testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: draftmd-windows-x64-unsigned
+          path: |
+            release/*-win-x64.exe
+            release/*-win-x64.zip
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: draftmd-windows-diagnostics
+          path: test-results/
+          if-no-files-found: ignore
+          retention-days: 7

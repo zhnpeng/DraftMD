@@ -89,6 +89,7 @@ export function buildApplicationMenu(deps: ApplicationMenuDeps): BuiltApplicatio
       isMac ? { label: labels.close, role: 'close' } : { label: labels.quit, role: 'quit' },
     ] },
     { label: labels.edit, submenu: [
+      ...(!isMac ? [{ label: labels.modelSettings, click: () => sendToFocused(deps, 'open-provider-settings') }, { type: 'separator' as const }] : []),
       { label: labels.undo, role: 'undo' }, { label: labels.redo, role: 'redo' }, { type: 'separator' },
       { label: labels.cut, role: 'cut' }, { label: labels.copy, role: 'copy' }, { label: labels.paste, role: 'paste' },
       { label: labels.selectAll, role: 'selectAll' }, { type: 'separator' },

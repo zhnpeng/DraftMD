@@ -3,6 +3,7 @@ import type { ProviderMessage, ProviderRequest } from '../../../shared/contracts
 
 interface OpenAIProviderData {
   content: string | null
+  reasoningContent?: string
   toolCalls: OpenAI.Chat.Completions.ChatCompletionMessageToolCall[]
 }
 
@@ -10,13 +11,15 @@ function isOpenAIProviderData(value: unknown): value is OpenAIProviderData {
   return Boolean(value && typeof value === 'object' && 'toolCalls' in value && Array.isArray((value as OpenAIProviderData).toolCalls))
 }
 
-export function toOpenAIMessages(request: ProviderRequest): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
+export function toOpenAIMessages(request: ProviderRequest, includeReasoningContent = false): OpenAI.Chat.Completions.ChatCompletionMessageParam[] {
   const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
     { role: 'system', content: request.system },
   ]
   for (const message of request.messages) {
     if (message.role === 'assistant' && message.provider && isOpenAIProviderData(message.providerData)) {
-      messages.push({ role: 'assistant', content: message.providerData.content, tool_calls: message.providerData.toolCalls })
+      messages.push({ role: 'assistant', content: message.providerData.content, tool_calls: message.providerData.toolCalls,
+        ...(includeReasoningContent && typeof message.providerData.reasoningContent === 'string' ? { reasoning_content: message.providerData.reasoningContent } : {}),
+      })
       continue
     }
     if (message.role === 'assistant') {

@@ -1,15 +1,15 @@
 # DraftMD Privacy
 
-DraftMD is a local-first Markdown editor. This document describes what is stored locally and what may leave the Mac when a model provider is used.
+DraftMD is a local-first Markdown editor. This document describes what is stored locally and what may leave the computer when a model provider is used.
 
 ## Local data
 
-DraftMD stores the following under the current macOS user account:
+DraftMD stores the following under the current OS user account:
 
 - Markdown documents in folders chosen by the user;
 - local conversation, task, and provider metadata in SQLite;
 - task snapshots used for Diff, Undo, and interrupted-task recovery;
-- model credentials and secret headers in macOS Keychain;
+- model credentials and secret headers in macOS Keychain or Windows Credential Manager (Windows candidate);
 - bounded rolling diagnostic logs containing only approved safe fields;
 - interface preferences such as language, theme, and editor font.
 

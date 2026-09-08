@@ -2,6 +2,10 @@
 
 > The open-source macOS AI Markdown editor.
 
+The source includes Windows x64 candidate adaptation. Windows runtime acceptance
+is still required; release downloads remain macOS-only.
+See [Windows build and testing](docs/windows.md).
+
 **Language / 语言: [English](README.md) · [中文](README_CN.md)**
 
 DraftMD combines a visual Markdown editor with an AI agent that works inside a folder you choose. Configure a model service, ask it to read or update your documents, inspect the changes, and undo a task when needed. External file changes also appear in real time while unsaved local edits are protected.
@@ -12,7 +16,7 @@ DraftMD combines a visual Markdown editor with an AI agent that works inside a f
 
 - **Built-in Agent & Chat**: Stream replies, follow tool activity, approve file deletion, and stop a running task. Providers are tested and labeled Agent, Chat only, or Unavailable.
 - **Reviewable Changes**: Inspect per-task file changes and Diff, undo with conflict checks, and recover interrupted tasks.
-- **Local Conversations**: Workspace-scoped session history, document and selection context, and credentials stored in macOS Keychain.
+- **Local Conversations**: Workspace-scoped history and context, with secrets in the OS credential store (macOS Keychain / Windows Credential Manager).
 - **Live Agent Sync** — External changes appear in the editor in real time.
 - **True WYSIWYG Editing** — Edit Markdown as rich text without a split preview.
 - **Files & Outline**: Open a folder as a workspace, browse its Markdown files, or navigate document headings.
@@ -25,17 +29,18 @@ DraftMD combines a visual Markdown editor with an AI agent that works inside a f
 
 ## Getting Started
 
-1. Install the [latest release](https://github.com/zhnpeng/DraftMD/releases/latest). Read the [0.1.0 installation notes](docs/releases/v0.1.0.md) for its unsigned-build limitations.
+1. Install the [latest release](https://github.com/zhnpeng/DraftMD/releases/latest). Read the [0.1.1 installation notes](docs/releases/v0.1.1.md) for its unsigned-build limitations.
 2. Open a folder containing your Markdown documents.
 3. Configure a provider and run its capability test. See [provider compatibility](docs/provider-compatibility.md).
 4. Start a conversation in the Agent Dock. Agent-capable configurations can use workspace file tools; Chat only configurations provide text suggestions.
 5. Review changes and any deletion approval, then keep the result or use Undo.
 
-This README describes the current source tree. The [0.1.0 release notes](docs/releases/v0.1.0.md) describe the release, and the [roadmap](docs/roadmap.md) lists outstanding validation. See [privacy](docs/privacy.md) for local storage, snapshot retention, and what is sent to providers.
+This README describes the current source tree. The [0.1.1 release notes](docs/releases/v0.1.1.md) describe the release, and the [roadmap](docs/roadmap.md) lists outstanding validation. See [privacy](docs/privacy.md) for local storage, snapshot retention, and what is sent to providers.
 
 ## Development
 
-Requirements: Node.js 22.12 or later and macOS.
+Requirements: Node.js 22.12 or later and macOS or Windows x64 (candidate adaptation).
+Use `npm run dist:win` for Windows packages; see [Windows testing scope](docs/windows.md).
 
 ```bash
 npm install

@@ -24,9 +24,14 @@ it('builds an isolated unsigned Universal candidate without publishing implicitl
   expect(command).not.toMatch(/--publish\s+(?:always|onTag|onTagOrDraft)/)
 })
 
-it('ships only macOS Universal artifacts', () => {
+it('configures macOS Universal and Windows x64 artifacts without implicit publication', () => {
   expect(builder).toContain('appId: app.draftmd.desktop')
-  expect(builder).not.toContain('\nwin:')
+  expect(builder).toContain('\nwin:')
+  expect(builder).toMatch(/win:[\s\S]*?target:[\s\S]*?target: nsis[\s\S]*?target: zip/)
+  expect(builder).toMatch(/win:[\s\S]*?arch:\s*\n\s*- x64/)
+  expect(builder).toContain("artifactName: '${productName}-${version}-win-${arch}.${ext}'")
+  expect(builder).toContain('icon: icon.png')
+  expect(builder).toMatch(/nsis:[\s\S]*?oneClick: false[\s\S]*?allowToChangeInstallationDirectory: true/)
+  expect(builder).toContain('\npublish: null')
   expect(builder).not.toContain('\nlinux:')
-  expect(builder).not.toContain('\nnsis:')
 })

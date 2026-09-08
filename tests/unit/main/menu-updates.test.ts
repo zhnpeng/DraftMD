@@ -12,6 +12,22 @@ vi.mock('electron', () => ({
 
 import { buildApplicationMenu } from '../../../src/main/app/menu'
 
+it('offers model settings on Windows without a macOS application menu', () => {
+  const send = vi.fn()
+  buildApplicationMenu({
+    locale: () => 'en', platform: 'win32', isPackaged: true, updatesConfigured: false,
+    getFocusedWindow: () => ({ isDestroyed: () => false, webContents: { isDestroyed: () => false, send } }) as never,
+    getAllWindows: () => [], recentWorkspaces: () => [],
+    openWorkspace: vi.fn(), openRecentWorkspace: vi.fn(), clearRecentWorkspaces: vi.fn(),
+    setAsDefaultApp: vi.fn(), openBundledDocument: vi.fn(), openCheatsheet: vi.fn(),
+    checkForUpdates: vi.fn(), downloadUpdate: vi.fn(), latestVersion: () => null, currentTheme: () => 'light',
+  })
+  expect(captured.template[0].label).toBe('File')
+  const items = captured.template.find(item => item.label === 'Edit')!.submenu as Array<{ label: string; click?: () => void }>
+  items.find(item => item.label.startsWith('Model Settings'))!.click!()
+  expect(send).toHaveBeenCalledWith('open-provider-settings')
+})
+
 it('shows truthful disabled copy when no update provider is configured', () => {
   buildApplicationMenu({
     locale: () => 'en', platform: 'darwin', isPackaged: true, updatesConfigured: false,

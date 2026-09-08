@@ -49,6 +49,7 @@ import { randomUUID } from 'node:crypto'
 import { uuidv7 } from './persistence/ids'
 import { createSafeLogger } from './diagnostics/logger'
 import { createDiagnosticsService } from './diagnostics/diagnostics-service'
+import { launchFiles } from './app/launch-files'
 
 const testEnvironment = resolveTestEnvironment({
   isPackaged: app.isPackaged,
@@ -60,6 +61,9 @@ const testEnvironment = resolveTestEnvironment({
 const testUserData = testEnvironment.userData
 if (testUserData) app.setPath('userData', testUserData)
 const testUpdatesDisabled = testEnvironment.disableUpdates
+
+// Explorer launches a second process for file associations; keep one profile owner.
+if (process.platform === 'win32' && !app.requestSingleInstanceLock()) app.exit(0)
 
 const startedAt = performance.now()
 const startupTraceEnabled = process.env.DRAFTMD_STARTUP_TRACE === '1'
@@ -284,7 +288,7 @@ rebuildMenu = () => {
     getFocusedWindow: BrowserWindow.getFocusedWindow, getAllWindows: BrowserWindow.getAllWindows,
     recentWorkspaces: () => recentWorkspaces.get(),
     openWorkspace: () => {
-      const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+      const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0] ?? windowManager.createWindow()
       if (win) void (async () => {
         const selected = await workspaceManager.openFolder(win)
         if (!selected) return
@@ -333,6 +337,24 @@ registerIpcHandlers({
 })
 let pendingFilePaths: string[] = []
 let isQuitting = false
+if (process.platform === 'win32') {
+  app.setAppUserModelId('app.draftmd.desktop')
+  let openingFiles = Promise.resolve()
+  app.on('second-instance', (_event, argv, workingDirectory) => {
+    const paths = launchFiles(argv, app.isPackaged, workingDirectory)
+    openingFiles = openingFiles.then(async () => {
+      await app.whenReady()
+      let openedWindow: BrowserWindow | null = null
+      for (const path of paths) {
+        openedWindow = await windowManager.openFile(path)
+        if (openedWindow) await workspaceManager.openFolder(openedWindow, dirname(path))
+      }
+      const win = openedWindow ?? BrowserWindow.getAllWindows()[0] ?? windowManager.createWindow()
+      if (win.isMinimized()) win.restore()
+      win.focus()
+    }).catch(() => { safeLogger.write({ level: 'error', module: 'app', code: 'OPEN_FILE_FAILED' }) })
+  })
+}
 app.whenReady().then(() => {
   markStartup('app-ready'); rebuildMenu(); void loadSystemFonts()
   const recoveringTasks = recovery.recover()
@@ -342,9 +364,7 @@ app.whenReady().then(() => {
     recovery: recoveringTasks, databaseWarning: persistence.warning,
     log: entry => safeLogger.write(entry),
   })
-  const appEntryIndex = app.isPackaged ? 0 : process.argv.findIndex((arg) => arg.endsWith('/dist/main/index.js'))
-  const args = process.argv.slice(appEntryIndex >= 0 ? appEntryIndex + 1 : app.isPackaged ? 1 : 2)
-    .filter((arg) => !arg.startsWith('-'))
+  const args = launchFiles(process.argv, app.isPackaged, process.cwd())
   if (args.length) pendingFilePaths = args
   if (pendingFilePaths.length) {
     pendingFilePaths.forEach((path) => {

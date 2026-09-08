@@ -2,6 +2,7 @@ import type { DraftMDAPI, ProviderConfigDTO, ProviderConfigInput, ProviderKind, 
 import { msg } from '../../shared/i18n'
 import { providerApiMode, type ProviderApiMode } from '../../shared/contracts/provider'
 import { applyProviderPreset, providerModelDefaults, providerSecretState, PROVIDER_MODEL_PRESETS_UPDATED_AT, type SecretAction } from './provider-form'
+import { reasoningEffortOptions, type ReasoningEffort } from '../../shared/reasoning-effort'
 
 function required<T extends HTMLElement>(root: ParentNode, selector: string): T {
   const element = root.querySelector(selector)
@@ -20,6 +21,8 @@ export function createProviderSettings(input: { api: DraftMDAPI; dialog: HTMLDia
   const apiModeRow = required<HTMLElement>(form, '[data-provider-api-mode]')
   const baseUrlInput = required<HTMLInputElement>(form, '[name=baseUrl]')
   const modelInput = required<HTMLInputElement>(form, '[name=model]')
+  const effortInput = required<HTMLSelectElement>(form, '[name=reasoningEffort]')
+  const effortRow = required<HTMLElement>(form, '[data-provider-reasoning]')
   const modelOptions = required<HTMLDataListElement>(form, '#provider-model-options')
   const syncModels = required<HTMLButtonElement>(form, '[data-provider-sync-models]')
   const modelStatus = required<HTMLElement>(form, '[data-model-status]')
@@ -37,6 +40,20 @@ export function createProviderSettings(input: { api: DraftMDAPI; dialog: HTMLDia
   let configs: ProviderConfigDTO[] = []
   let secretAction: SecretAction = 'retain'
   let modelGeneration = 0
+
+  const renderEffort = (selected = effortInput.value): void => {
+    const supported = reasoningEffortOptions({ kind: kindInput.value as ProviderKind, model: modelInput.value, apiMode: apiModeInput.value as ProviderApiMode })
+    const options: ReasoningEffort[] = ['default', ...supported]
+    effortInput.replaceChildren(...options.map(value => {
+      const option = document.createElement('option')
+      option.value = value
+      option.textContent = msg(`provider.reasoning.${value}`)
+      return option
+    }))
+    effortInput.value = options.includes(selected as ReasoningEffort) ? selected : 'default'
+    effortRow.hidden = supported.length === 0
+  }
+  const onReasoningModel = (): void => { renderEffort() }
 
   const renderModels = (models: ProviderModel[]): void => {
     modelOptions.replaceChildren(...models.map(model => {
@@ -88,12 +105,14 @@ export function createProviderSettings(input: { api: DraftMDAPI; dialog: HTMLDia
     const defaults = providerModelDefaults(kindInput.value as ProviderKind, presetInput.value as ProviderPreset)
     baseUrlInput.value = config?.baseUrl ?? defaults.baseUrl
     modelInput.value = config?.model ?? defaults.model
+    renderEffort(config?.reasoningEffort ?? 'default')
     insecureInput.checked = config?.insecureHttpApproved ?? false
     disclosureInput.checked = false
     headerNameInput.value = ''
     headerValueInput.value = ''
     secretAction = 'retain'
-    status.textContent = config ? msg(`provider.capability.${config.capability}` as 'provider.capability.agent') : ''
+    status.textContent = config?.lastTestErrorCode ? msg(`provider.error.${config.lastTestErrorCode}`)
+      : config ? msg(`provider.capability.${config.capability}` as 'provider.capability.agent') : ''
     renderSecret()
     updateConnectionNote()
     resetModels()
@@ -137,6 +156,7 @@ export function createProviderSettings(input: { api: DraftMDAPI; dialog: HTMLDia
       apiMode: kindInput.value === 'anthropic' ? undefined : apiModeInput.value as ProviderApiMode,
       preset: presetInput.value as ProviderPreset, baseUrl: baseUrlInput.value.trim(),
       model: modelInput.value.trim(), timeoutMs: 60_000, streamEnabled: true,
+      reasoningEffort: effortInput.value as ReasoningEffort,
       toolsEnabled: true, insecureHttpApproved: insecureInput.checked,
     }
     if (!disclosureInput.checked) throw new Error(msg('provider.privacy.required'))
@@ -153,6 +173,7 @@ export function createProviderSettings(input: { api: DraftMDAPI; dialog: HTMLDia
     apiModeInput.value = next.preset === 'none' ? 'responses' : 'chat-completions'
     apiModeRow.hidden = kindInput.value === 'anthropic'
     modelInput.value = ''
+    renderEffort('default')
     secretAction = 'retain'
     renderSecret()
     headerValueInput.value = ''
@@ -166,6 +187,7 @@ export function createProviderSettings(input: { api: DraftMDAPI; dialog: HTMLDia
     const defaults = providerModelDefaults(kindInput.value as ProviderKind)
     baseUrlInput.value = defaults.baseUrl
     modelInput.value = defaults.model
+    renderEffort('default')
     apiKeyInput.value = ''
     headerValueInput.value = ''
     secretAction = 'retain'
@@ -213,10 +235,10 @@ export function createProviderSettings(input: { api: DraftMDAPI; dialog: HTMLDia
       const saved = await save()
       status.textContent = msg('provider.test.running')
       const result = await input.api.testProviderConfig(saved.id)
+      await refresh()
       status.textContent = result.cancelled ? msg('provider.test.cancelled')
         : result.errorCode ? msg(`provider.error.${result.errorCode}` as 'provider.error.AUTHENTICATION')
           : msg(`provider.capability.${result.capability}` as 'provider.capability.agent')
-      await refresh()
     })().catch((error) => { status.textContent = error instanceof Error ? error.message : msg('provider.error.PROVIDER_ERROR') })
   }
   const newButton = required<HTMLButtonElement>(input.dialog, '[data-provider-new]')
@@ -229,6 +251,8 @@ export function createProviderSettings(input: { api: DraftMDAPI; dialog: HTMLDia
   const onDefault = (): void => { const id = idInput.value; if (id) void input.api.setDefaultProvider(id).then(refresh) }
   presetInput.addEventListener('change', onPreset)
   kindInput.addEventListener('change', onKind)
+  modelInput.addEventListener('input', onReasoningModel)
+  apiModeInput.addEventListener('change', onReasoningModel)
   const connectionInputs = [apiKeyInput, headerNameInput, headerValueInput, insecureInput]
   baseUrlInput.addEventListener('input', onEndpoint)
   connectionInputs.forEach(element => element.addEventListener('input', onConnection))
@@ -250,6 +274,8 @@ export function createProviderSettings(input: { api: DraftMDAPI; dialog: HTMLDia
       presetInput.removeEventListener('change', onPreset); kindInput.removeEventListener('change', onKind); form.removeEventListener('submit', onSubmit)
       connectionInputs.forEach(element => element.removeEventListener('input', onConnection))
       baseUrlInput.removeEventListener('input', onEndpoint)
+      modelInput.removeEventListener('input', onReasoningModel)
+      apiModeInput.removeEventListener('change', onReasoningModel)
       syncModels.removeEventListener('click', onSyncModels); input.dialog.removeEventListener('close', resetModels)
       replaceSecret.removeEventListener('click', onReplace); removeSecret.removeEventListener('click', onRemove)
       testButton.removeEventListener('click', onTest); newButton.removeEventListener('click', onNew)

@@ -1,6 +1,6 @@
 # DraftMD Current Status and Roadmap
 
-Updated 2026-09-05 for source version `0.1.0`. Consult the [release notes](releases/v0.1.0.md) for changes and installation limits, and [GitHub Releases](https://github.com/zhnpeng/DraftMD/releases) for published downloads.
+Updated 2026-09-08 for source version `0.1.1`. Consult the [release notes](releases/v0.1.1.md) for changes and installation limits, and [GitHub Releases](https://github.com/zhnpeng/DraftMD/releases) for published downloads.
 
 ## Implemented MVP Areas
 
@@ -13,7 +13,17 @@ Updated 2026-09-05 for source version `0.1.0`. Consult the [release notes](relea
 
 These areas have implementations and automated coverage. They do not replace the release validation below.
 
-## 0.1.0 Maintenance
+## 0.1.1 Release
+
+The owner completed personal use and authorized a fresh unsigned macOS-only regular release on 2026-09-08, lifting the earlier publication hold. See the [release checklist](release-checklist.md) and the tag's GitHub Actions run for publication and validation status. Previous drafts are not republished.
+
+- Add Responses API alongside Chat Completions, provider-aware model suggestions and model-list synchronization.
+- Move the Agent into a resizable right sidebar and keep exported documents free of application chrome.
+- Add per-provider reasoning effort with model-aware choices, persistence and matching capability probes.
+- Automatically reveal the root file list when opening a workspace, while preserving manual collapse during background refreshes; restore Open Folder when all macOS windows are closed.
+- Include Windows x64 runtime adaptation, native packaging and candidate CI in source only. Windows runtime/installer acceptance remains outstanding; see [Windows acceptance](windows.md).
+
+## 0.1.0 Maintenance History
 
 - Restore running Agent and Chat tasks when switching conversations, including pending approvals and streamed output.
 - Prevent active conversation deletion and model switching that would invalidate running tasks; cancel provider requests on Stop or window close.
@@ -37,11 +47,11 @@ The [latest candidate report](reports/2026-09-05-runtime-boundaries-candidate.md
 4. For a future signed distribution, configure Apple Developer ID signing and notarization credentials, produce a signed candidate, and verify stapling and normal Gatekeeper installation. Signing is not required for the current unsigned GitHub Release.
 5. Configure branch protection as needed. Hosted CI and release results are recorded in GitHub Actions for each commit and tag.
 
-Automatic updates remain disabled until a validated release channel is configured. Version 0.1.0 is an unsigned regular GitHub Release. The dated [release checklist](release-checklist.md) preserves the earlier candidate's evidence and is not a fresh acceptance report for this source tree.
+Automatic updates remain disabled until a validated release channel is configured. Version 0.1.1 targets an unsigned regular GitHub Release; confirm published downloads on GitHub. The dated [release checklist](release-checklist.md) preserves the earlier candidate's evidence and is not a fresh acceptance report for this source tree.
 
 ## Later Product Work
 
-Candidates and deliberately deferred areas are listed in [feature requests](feature-requests.md). Current priorities are release reliability and validation of the existing macOS workflow. Word/image export, other platforms, multiwindow product workflows, custom theme import, cloud collaboration, shell/web tools, and MCP are outside this MVP's acceptance scope.
+Candidates are listed in [feature requests](feature-requests.md). Priorities include macOS reliability and Windows x64 candidate validation. Word/image export, Linux/mobile/Web, multiwindow product workflows, custom theme import, cloud collaboration, shell/web tools, and MCP remain outside scope.
 
 ## Planning History
 
