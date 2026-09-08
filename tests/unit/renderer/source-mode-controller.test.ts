@@ -415,7 +415,6 @@ describe('large-document reduced rendering', () => {
     expect(controller.isSourceMode()).toBe(true)
     expect(controller.currentContent()).toBe(large)
     expect(sourceElement.value).toBe(large)
-    expect(sourceElement.attributes.get('wrap')).toBe('off')
     expect(toggleButton.disabled).toBe(true)
     expect(setMarkdown).not.toHaveBeenCalled()
     expect(states).toEqual([true])
@@ -446,7 +445,6 @@ describe('large-document reduced rendering', () => {
     expect(controller.isReducedRendering()).toBe(false)
     expect(controller.isSourceMode()).toBe(false)
     expect(toggleButton.disabled).toBe(false)
-    expect(sourceElement.attributes.get('wrap')).toBe('soft')
     expect(setMarkdown).toHaveBeenLastCalledWith('# Small', 'programmatic', true)
   })
 

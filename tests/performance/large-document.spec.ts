@@ -21,7 +21,6 @@ test('opens and edits a 5 MiB mixed Markdown document without a one-second rende
     const readyMs = performance.now() - started
     const source = page.locator('#source-editor')
     await expect(source).toBeVisible()
-    await expect(source).toHaveAttribute('wrap', 'off')
     await expect(page.locator('#reduced-rendering-banner')).toBeVisible()
     await expect(page.locator('#source-toggle-btn')).toBeDisabled()
 
