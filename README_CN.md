@@ -10,6 +10,22 @@ DraftMD 将可视化 Markdown 编辑器与内置 AI Agent 结合。选择本地�
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+## 看看怎么用
+
+### 1. 打开文件夹，开始写作
+
+左侧文件列表会自动展开，中间直接编辑 Markdown，右侧 Agent 与当前文档并排显示。
+
+![DraftMD 中文界面：左侧浏览文件，中间编辑产品发布清单，右侧输入 Agent 任务](docs/images/workspace-zh-CN.png)
+
+### 2. 提出修改，检查结果
+
+先在**模型设置**中配置服务并运行能力测试，再发送任务，例如“修改 task.md 的审阅状态，保留其他内容”。任务完成后，展开变更文件查看 Diff；点击**撤销任务**可撤回该任务的修改，并检查是否与后续编辑冲突。删除文档需要你明确批准。
+
+![Agent 完成文档修改，展示文件工具活动、逐行 Diff 和撤销任务按钮](docs/images/review-zh-CN.png)
+
+*截图来自 DraftMD 真实界面，使用示例文档与确定性的本地演示服务，用于展示操作流程，不代表特定云模型的输出质量或兼容性；未使用私人文档或 API Key。*
+
 ## 功能
 
 - **内置 Agent 与聊天**：流式回复、工具活动、文件删除审批和任务停止；模型配置经测试后区分 Agent、Chat only 与 Unavailable。

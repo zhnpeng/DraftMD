@@ -12,6 +12,22 @@ DraftMD combines a visual Markdown editor with an AI agent that works inside a f
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+## See It in Action
+
+### 1. Open a folder and start writing
+
+The file list opens automatically on the left. Edit Markdown in the center and keep the Agent beside your document on the right.
+
+![DraftMD workspace with a project launch checklist, folder navigation, and an Agent request](docs/images/workspace-en.png)
+
+### 2. Ask for a change, then review it
+
+Configure a model service in **Model Settings** and run its capability test. Send a request such as “Change the review status in task.md and keep everything else unchanged.” Expand a changed file to inspect the Diff; **Undo task** reverts that task while checking for conflicts with later edits. Deleting a document requires approval.
+
+![Completed Agent task showing the updated document, file-tool activity, line-by-line Diff, and Undo task](docs/images/review-en.png)
+
+*Actual DraftMD UI captured with sample documents and a deterministic local demo provider. These screenshots illustrate the workflow, not the output quality or compatibility of a particular cloud model. No private documents or API keys are used.*
+
 ## Features
 
 - **Built-in Agent & Chat**: Stream replies, follow tool activity, approve file deletion, and stop a running task. Providers are tested and labeled Agent, Chat only, or Unavailable.
