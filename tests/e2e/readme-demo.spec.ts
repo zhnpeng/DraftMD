@@ -34,6 +34,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
         return window.draftmd.testProviderConfig(saved.id)
       }, { baseUrl: server.baseUrl, name: chinese ? '本地演示' : 'Local demo' })
       expect(capability.capability).toBe('agent')
+      await page.locator('#agent-model-button').click()
+      await page.keyboard.press('Escape')
       await expect(page.locator('#file-list button[data-path="notes"]')).toBeVisible()
       await expect(page.locator('#editor .ProseMirror')).toContainText(chinese ? '产品发布计划' : 'Product launch plan')
       const prompt = chinese ? '将 task.md 的审阅状态从 before review 改为 after review，保留其他内容。' : 'Change the status in task.md from before review to after review. Keep everything else unchanged.'
@@ -46,6 +48,8 @@ for (const locale of ['en', 'zh-CN'] as const) {
       await changes.locator('summary').click()
       await expect(changes).toContainText('−Status: before review')
       await expect(changes).toContainText('+Status: after review')
+      await expect(changes.locator('.visually-hidden').first()).toHaveCSS('position', 'absolute')
+      await expect(changes.locator('.visually-hidden').first()).toHaveCSS('clip-path', 'inset(50%)')
       await page.screenshot({ path: test.info().outputPath(`review-${locale}.png`) })
       await page.locator('.agent-undo-task').focus()
       await page.keyboard.press('Enter')
