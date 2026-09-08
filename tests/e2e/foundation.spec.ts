@@ -17,7 +17,7 @@ test('switches folder files in the same window and saves the previous document b
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] })
     }, app.userDataPath)
     await page.evaluate(() => window.draftmd.openWorkspace())
-    if (!await page.locator('#file-list').isVisible()) await page.locator('#file-toggle-btn').click()
+    await expect(page.locator('#file-list')).toBeVisible()
     await page.locator('#file-list button[data-path="first.md"]').click()
     await expect(page.locator('#file-title')).toHaveText('first.md')
     const windowIds = await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(win => win.id).sort())

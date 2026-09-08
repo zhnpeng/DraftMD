@@ -145,7 +145,7 @@ describe('Markdown workspace path guard', () => {
 
 describe('workspace identity', () => {
   it('derives a stable namespaced SHA-256 identifier without exposing the root', () => {
-    const id = workspaceId('/Users/example/Documents')
+    const id = workspaceId('/Users/example/Documents', false)
 
     expect(id).toBe('78bbdeec8e528da3d2ec7bea8f31b442b3368131871f10450b59af2748d9596f')
     expect(id).not.toContain('/Users/example')

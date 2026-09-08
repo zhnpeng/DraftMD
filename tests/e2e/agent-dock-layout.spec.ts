@@ -10,6 +10,10 @@ for (const viewport of [{ width: 1280, height: 800 }, { width: 800, height: 600 
       const page = await app.windowMatching(async p => await p.locator('#file-title').textContent().catch(() => '') === 'notes.md')
       const win = await app.browserWindow(page)
       await win.evaluate((w, size) => w.setContentSize(size.width, size.height), viewport)
+      // Hosted macOS displays can clamp native windows below the requested height.
+      // Set the renderer viewport explicitly so both layout sizes are exercised.
+      await page.setViewportSize(viewport)
+      await expect.poll(() => page.evaluate(() => ({ width: innerWidth, height: innerHeight }))).toEqual(viewport)
       if (!await page.locator('#file-list').isVisible()) await page.locator('#file-toggle-btn').click()
       const input = page.locator('#agent-input')
       const editor = page.locator('#editor')
