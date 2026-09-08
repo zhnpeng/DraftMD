@@ -42,6 +42,13 @@ jobs:
         run: npm run test:security
       - name: End-to-end tests
         run: npm run test:e2e
+      - name: Upload README workflow screenshots
+        uses: actions/upload-artifact@v4
+        with:
+          name: draftmd-readme-screenshots
+          path: test-results/readme-demo-*/**/*.png
+          if-no-files-found: error
+          retention-days: 7
       - name: Performance tests
         run: npm run test:performance
       - name: Build
