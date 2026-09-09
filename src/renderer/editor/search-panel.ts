@@ -2,6 +2,7 @@ import { Decoration, DecorationSet } from '@milkdown/kit/prose/view'
 import { getEditorView, searchPluginKey } from './editor'
 import { getActiveSourceSurface, type SourceSurface } from './source-surface'
 import { msg } from '../../shared/i18n'
+import { isPrimaryModifier } from '../../shared/platform'
 
 export class SearchPanel {
   private container: HTMLDivElement
@@ -11,6 +12,12 @@ export class SearchPanel {
   private currentIndex = -1
   private visible = false
   private readonly documentKeydown = (e: KeyboardEvent): void => {
+    if (isPrimaryModifier(e, document.documentElement.dataset.platform ?? 'darwin') && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'f') {
+      e.preventDefault()
+      e.stopPropagation()
+      this.show()
+      return
+    }
     if (this.visible && e.key === 'Escape') {
       e.preventDefault()
       e.stopPropagation()
