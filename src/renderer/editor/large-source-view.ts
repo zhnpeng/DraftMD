@@ -4,6 +4,24 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import type { LargeSourceSurface } from './source-surface'
 import { mapTextRange } from './selection-reference'
 
+export function internalToSourceOffset(state: EditorState, offset: number): number {
+  const clamped = Math.max(0, Math.min(state.doc.length, offset))
+  const line = state.doc.lineAt(clamped)
+  return clamped + (line.number - 1) * (state.lineBreak.length - 1)
+}
+
+export function sourceToInternalOffset(state: EditorState, offset: number): number {
+  const sourceLength = state.sliceDoc().length
+  const target = Math.max(0, Math.min(sourceLength, offset))
+  let low = 0, high = state.doc.length
+  while (low < high) {
+    const middle = Math.ceil((low + high) / 2)
+    if (internalToSourceOffset(state, middle) <= target) low = middle
+    else high = middle - 1
+  }
+  return low
+}
+
 export function createLargeSourceView(host: HTMLElement, content: string, onInput: () => void): LargeSourceSurface {
   const extensions = [
     history(), keymap.of([...defaultKeymap, ...historyKeymap]), EditorView.lineWrapping,
@@ -24,14 +42,15 @@ export function createLargeSourceView(host: HTMLElement, content: string, onInpu
   const view = new EditorView({ parent: host, state: state(content) })
   return {
     content: () => view.state.sliceDoc(),
-    selection: () => ({ anchor: view.state.selection.main.anchor, head: view.state.selection.main.head }),
+    selection: () => ({ anchor: internalToSourceOffset(view.state, view.state.selection.main.anchor), head: internalToSourceOffset(view.state, view.state.selection.main.head) }),
     select(anchor, head) {
-      const clamp = (value: number) => Math.max(0, Math.min(view.state.doc.length, value))
-      view.dispatch({ selection: EditorSelection.single(clamp(anchor), clamp(head)), effects: EditorView.scrollIntoView(clamp(head)) })
+      const internalAnchor = sourceToInternalOffset(view.state, anchor)
+      const internalHead = sourceToInternalOffset(view.state, head)
+      view.dispatch({ selection: EditorSelection.single(internalAnchor, internalHead), effects: EditorView.scrollIntoView(internalHead) })
     },
     replaceSelection(text) {
       const { from, to } = view.state.selection.main
-      view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length }, annotations: Transaction.userEvent.of('input') })
+      view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + view.state.toText(text).length }, annotations: Transaction.userEvent.of('input') })
     },
     focus: () => view.focus(),
     setContent(content, preservePosition) {
@@ -39,14 +58,19 @@ export function createLargeSourceView(host: HTMLElement, content: string, onInpu
       const before = view.state.sliceDoc()
       if (before === content) return
       const selected = view.state.selection.main
-      const range = mapTextRange(before, content, selected.from, selected.to)
+      const anchorSource = internalToSourceOffset(view.state, selected.anchor)
+      const headSource = internalToSourceOffset(view.state, selected.head)
+      const range = mapTextRange(before, content, Math.min(anchorSource, headSource), Math.max(anchorSource, headSource))
       const scrollTop = view.scrollDOM.scrollTop
-      const anchor = view.lineBlockAtHeight(scrollTop)
-      const scrollPosition = mapTextRange(before, content, anchor.from, anchor.from).start
-      const scrollOffset = anchor.top - scrollTop
+      const scrollAnchor = view.lineBlockAtHeight(scrollTop)
+      const scrollSource = internalToSourceOffset(view.state, scrollAnchor.from)
+      const scrollPosition = sourceToInternalOffset(state(content), mapTextRange(before, content, scrollSource, scrollSource).start)
+      const scrollOffset = scrollAnchor.top - scrollTop
       const focused = view.hasFocus
       view.setState(state(content))
-      view.dispatch({ selection: EditorSelection.single(selected.anchor > selected.head ? range.end : range.start, selected.anchor > selected.head ? range.start : range.end), effects: EditorView.scrollIntoView(scrollPosition, { y: 'start', yMargin: Math.max(0, Math.min(view.scrollDOM.clientHeight - 1, scrollOffset)) }) })
+      const selectionAnchor = sourceToInternalOffset(view.state, anchorSource > headSource ? range.end : range.start)
+      const head = sourceToInternalOffset(view.state, anchorSource > headSource ? range.start : range.end)
+      view.dispatch({ selection: EditorSelection.single(selectionAnchor, head), effects: EditorView.scrollIntoView(scrollPosition, { y: 'start', yMargin: Math.max(0, Math.min(view.scrollDOM.clientHeight - 1, scrollOffset)) }) })
       if (focused) view.focus()
     },
     destroy: () => view.destroy(),
