@@ -1,4 +1,4 @@
-import { EditorSelection, EditorState, Text, Transaction } from '@codemirror/state'
+import { EditorSelection, EditorState, Transaction } from '@codemirror/state'
 import { EditorView, keymap } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import type { LargeSourceSurface } from './source-surface'
@@ -19,10 +19,11 @@ export function createLargeSourceView(host: HTMLElement, content: string, onInpu
       '.cm-cursor': { borderLeftColor: 'var(--text-color)' },
     }),
   ]
-  const state = (value: string) => EditorState.create({ doc: Text.of(value.split('\n')), extensions })
+  const lineSeparator = (value: string) => value.includes('\r\n') ? '\r\n' : value.includes('\r') ? '\r' : '\n'
+  const state = (value: string) => EditorState.create({ doc: value, extensions: [EditorState.lineSeparator.of(lineSeparator(value)), ...extensions] })
   const view = new EditorView({ parent: host, state: state(content) })
   return {
-    content: () => view.state.doc.toString(),
+    content: () => view.state.sliceDoc(),
     selection: () => ({ anchor: view.state.selection.main.anchor, head: view.state.selection.main.head }),
     select(anchor, head) {
       const clamp = (value: number) => Math.max(0, Math.min(view.state.doc.length, value))
@@ -30,12 +31,12 @@ export function createLargeSourceView(host: HTMLElement, content: string, onInpu
     },
     replaceSelection(text) {
       const { from, to } = view.state.selection.main
-      view.dispatch({ changes: { from, to, insert: Text.of(text.split('\n')) }, selection: { anchor: from + text.length }, annotations: Transaction.userEvent.of('input') })
+      view.dispatch({ changes: { from, to, insert: text }, selection: { anchor: from + text.length }, annotations: Transaction.userEvent.of('input') })
     },
     focus: () => view.focus(),
     setContent(content, preservePosition) {
       if (!preservePosition) { view.setState(state(content)); view.scrollDOM.scrollTop = 0; return }
-      const before = view.state.doc.toString()
+      const before = view.state.sliceDoc()
       if (before === content) return
       const selected = view.state.selection.main
       const range = mapTextRange(before, content, selected.from, selected.to)
