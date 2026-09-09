@@ -8,6 +8,7 @@ export default defineConfig({
   testDir: './tests',
   testMatch: [
     '**/e2e/foundation.spec.ts',
+    '**/e2e/large-source.spec.ts',
     '**/e2e/desktop-platform.spec.ts',
     '**/e2e/workspace.spec.ts',
     '**/e2e/agent-input.spec.ts',

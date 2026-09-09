@@ -466,3 +466,43 @@ describe('large-document reduced rendering', () => {
     expect(controller.isSourceMode()).toBe(true)
   })
 })
+
+describe('viewport source integration', () => {
+  it('keeps large text out of the textarea and routes edits, selection and external replacement through the surface', () => {
+    const sourceElement = new FakeTextarea()
+    let content = ''
+    let notify = () => {}
+    const surface = {
+      content: () => content,
+      selection: () => ({ anchor: 9, head: 2 }),
+      select: vi.fn(), replaceSelection: vi.fn(), focus: vi.fn(),
+      setContent: vi.fn((value: string) => { content = value }), destroy: vi.fn(),
+    }
+    const setMarkdown = vi.fn()
+    const controller = createSourceModeController({
+      editorElement: new FakeElement() as unknown as HTMLElement,
+      sourceElement: sourceElement as unknown as HTMLTextAreaElement,
+      toggleButton: new FakeElement() as unknown as HTMLButtonElement,
+      editor: { getMarkdown: () => '', setMarkdown },
+      createLargeSurface(value, onInput) { content = value; notify = onInput; return surface },
+    })
+    const input = vi.fn()
+    controller.onSourceInput(input)
+    const large = '# Large\n' + '文档🙂\n'.repeat(400_000)
+    controller.setContent(large)
+    expect(sourceElement.value).toBe('')
+    expect(controller.currentContent()).toBe(large)
+    expect(controller.selection()).toEqual({ anchor: 9, head: 2 })
+    expect(setMarkdown).not.toHaveBeenCalled()
+    content += 'edited'; notify()
+    expect(input).toHaveBeenCalledOnce()
+    expect(controller.currentContent()).toBe(large + 'edited')
+    controller.setContentPreservingMode(large + 'external')
+    expect(surface.setContent).toHaveBeenLastCalledWith(large + 'external', true)
+    controller.setContent('# Small')
+    expect(surface.destroy).toHaveBeenCalledOnce()
+    expect(controller.isReducedRendering()).toBe(false)
+    expect(setMarkdown).toHaveBeenLastCalledWith('# Small', 'programmatic', true)
+    controller.dispose()
+  })
+})

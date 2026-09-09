@@ -13,7 +13,6 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 15
     env:
-      DRAFTMD_LAYOUT_ATTRIBUTION: '1'
       DRAFTMD_LARGE_DOCUMENT_EDIT_BUDGET_MS: '2000'
       DRAFTMD_LARGE_DOCUMENT_LONG_TASK_BUDGET_MS: '3000'
     steps:
@@ -23,7 +22,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npx playwright test --config playwright.performance.config.ts virtual-source-proof.spec.ts
+      - run: npx playwright test --config playwright.performance.config.ts large-document.spec.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:

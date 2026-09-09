@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { expect, test } from '@playwright/test'
-import { mkdtemp, open, rm, stat } from 'node:fs/promises'
+import { mkdtemp, open, readFile, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { findMatchingWindow, launchDraftMD } from '../helpers/electron-app'
@@ -12,6 +12,7 @@ test('opens and edits a 5 MiB mixed Markdown document without a one-second rende
   const fixture = await mkdtemp(join(tmpdir(), 'draftmd-large-document-'))
   await exec(process.execPath, ['scripts/generate-performance-fixtures.mjs', '--output', fixture], { cwd: process.cwd() })
   const documentPath = join(fixture, 'large.md')
+  const original = await readFile(documentPath, 'utf8')
   const started = performance.now()
   const app = await launchDraftMD({ documentPath })
   try {
@@ -19,7 +20,7 @@ test('opens and edits a 5 MiB mixed Markdown document without a one-second rende
     const onboarding = page.locator('#onboarding-dialog')
     if (await onboarding.isVisible().catch(() => false)) await onboarding.getByRole('button', { name: /Skip guide|跳过指南/ }).click()
     const readyMs = performance.now() - started
-    const source = page.locator('#source-editor')
+    const source = page.locator('#large-source-editor .cm-content')
     await expect(source).toBeVisible()
     await expect(page.locator('#reduced-rendering-banner')).toBeVisible()
     await expect(page.locator('#source-toggle-btn')).toBeDisabled()
@@ -42,13 +43,11 @@ test('opens and edits a 5 MiB mixed Markdown document without a one-second rende
       await profiler.send('Tracing.start', { categories: 'devtools.timeline,disabled-by-default-devtools.timeline,blink,accessibility', transferMode: 'ReportEvents' })
     }
     const editStarted = performance.now()
-    const edited = await source.evaluate((element: HTMLTextAreaElement) => {
-      const sentinel = ' DRAFTMD_LARGE_EDIT_42'
-      element.setRangeText(sentinel, element.value.length, element.value.length, 'end')
-      element.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: sentinel }))
-      return element.value.endsWith(sentinel)
-    })
-    expect(edited).toBe(true)
+    // The production large-document surface is viewport-rendered; insert the same
+    // sentinel through native input rather than a textarea-only setRangeText API.
+    await source.focus()
+    await page.keyboard.press('ControlOrMeta+End')
+    await page.keyboard.insertText(' DRAFTMD_LARGE_EDIT_42')
     const editMs = performance.now() - editStarted
     await page.waitForTimeout(150)
     const saveStarted = performance.now()
@@ -74,8 +73,11 @@ test('opens and edits a 5 MiB mixed Markdown document without a one-second rende
         await writeFile('artifacts/performance/large-document-trace.json', JSON.stringify({ traceEvents }))
       })
     }
+    await expect.poll(() => readFile(documentPath, 'utf8')).toBe(original + ' DRAFTMD_LARGE_EDIT_42')
+    await page.waitForTimeout(800)
     const longTasks = await page.evaluate(() => {
       const state = (window as unknown as { __draftmdLongTasks: { durations: number[]; observer: PerformanceObserver } }).__draftmdLongTasks
+      state.durations.push(...state.observer.takeRecords().map(entry => entry.duration))
       state.observer.disconnect()
       return state.durations
     })
@@ -86,6 +88,8 @@ test('opens and edits a 5 MiB mixed Markdown document without a one-second rende
     const result = { readyMs, editMs, editBudgetMs, saveMs, longTaskMs: longTasks, maxLongTaskMs: Math.max(0, ...longTasks), longTaskBudgetMs, mermaidNodes: await page.locator('.mermaid-diagram').count(), bytes: (await stat(documentPath)).size }
     console.log(`large-document metrics: ${JSON.stringify(result)}`)
     await import('node:fs/promises').then(({ mkdir, writeFile }) => mkdir('artifacts/performance', { recursive: true }).then(() => writeFile('artifacts/performance/large-document.json', JSON.stringify(result, null, 2))))
+    expect(await page.locator('#large-source-editor *').count()).toBeLessThan(2000)
+    expect(await page.locator('#source-editor').inputValue()).toBe('')
     expect(result.editMs).toBeLessThan(result.editBudgetMs)
     expect(result.maxLongTaskMs).toBeLessThan(result.longTaskBudgetMs)
   } finally {

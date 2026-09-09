@@ -1,5 +1,7 @@
 import { msg } from '../../shared/i18n'
 import type { EditorUpdateOrigin } from '../editor/update-origin'
+import type { LargeSourceSurface, SourceSurface } from '../editor/source-surface'
+import { setActiveSourceSurface } from '../editor/source-surface'
 import { mapTextRange } from '../editor/selection-reference'
 
 export interface EditorAdapter {
@@ -23,6 +25,7 @@ export const REDUCED_RENDERING_THRESHOLD_BYTES = 2 * 1024 * 1024
 
 export interface SourceModeController {
   currentContent(): string
+  selection(): { anchor: number; head: number }
   setContent(content: string): void
   setContentWithPosition(content: string): void
   setContentPreservingMode(content: string): void
@@ -53,6 +56,7 @@ export function createSourceModeController(input: {
   sourceElement: HTMLTextAreaElement
   toggleButton: HTMLButtonElement
   editor: EditorAdapter
+  createLargeSurface?(content: string, onInput: () => void): LargeSourceSurface
   activeElement?(): Element | null
   documentGeneration?(): number
   onReducedRenderingChanged?(reduced: boolean): void
@@ -61,6 +65,18 @@ export function createSourceModeController(input: {
   let reducedRendering = false
   let sourceSession = 0
   let exportVersion = 0
+  let large: LargeSourceSurface | null = null
+  const textarea: SourceSurface = {
+    content: () => input.sourceElement.value,
+    selection: () => input.sourceElement.selectionDirection === 'backward'
+      ? { anchor: input.sourceElement.selectionEnd, head: input.sourceElement.selectionStart }
+      : { anchor: input.sourceElement.selectionStart, head: input.sourceElement.selectionEnd },
+    select(anchor, head) { input.sourceElement.setSelectionRange(Math.min(anchor, head), Math.max(anchor, head), anchor > head ? 'backward' : 'forward') },
+    replaceSelection(text) { input.sourceElement.setRangeText(text, input.sourceElement.selectionStart, input.sourceElement.selectionEnd, 'end'); handleInput() },
+    focus: () => input.sourceElement.focus(),
+  }
+  const destroyLarge = (): void => { large?.destroy(); large = null }
+
   const sourceListeners = new Set<() => void>()
 
   const updateToggle = (): void => {
@@ -71,6 +87,8 @@ export function createSourceModeController(input: {
     if (tip) tip.textContent = label
   }
   const enter = (content: string, ratio = 0): void => {
+    destroyLarge()
+    setActiveSourceSurface(textarea)
     sourceMode = true
     sourceSession += 1
     input.editorElement.classList.add('hidden')
@@ -80,6 +98,7 @@ export function createSourceModeController(input: {
     updateToggle()
   }
   const exit = (): void => {
+    setActiveSourceSurface(null)
     sourceMode = false
     input.editorElement.classList.remove('hidden')
     input.sourceElement.classList.remove('visible')
@@ -107,9 +126,18 @@ export function createSourceModeController(input: {
   const isLargeDocument = (content: string): boolean => new TextEncoder().encode(content).byteLength >= REDUCED_RENDERING_THRESHOLD_BYTES
   const enterReducedRendering = (content: string): void => {
     setReducedRendering(true)
-    enter(content, scrollRatio(input.sourceElement))
+    if (!input.createLargeSurface) { enter(content, scrollRatio(input.sourceElement)); return }
+    destroyLarge()
+    sourceMode = true
+    sourceSession += 1
+    input.editorElement.classList.add('hidden')
+    input.sourceElement.classList.remove('visible')
+    input.sourceElement.value = ''
+    large = input.createLargeSurface(content, handleInput)
+    setActiveSourceSurface(large)
+    updateToggle()
   }
-  const leaveReducedRendering = (): void => setReducedRendering(false)
+  const leaveReducedRendering = (): void => { destroyLarge(); setReducedRendering(false) }
   const handleClick = (): void => toggle()
   const handleInput = (): void => sourceListeners.forEach((listener) => listener())
   input.toggleButton.addEventListener('click', handleClick)
@@ -117,7 +145,8 @@ export function createSourceModeController(input: {
   updateToggle()
 
   return {
-    currentContent: () => sourceMode ? input.sourceElement.value : input.editor.getMarkdown(),
+    currentContent: () => large ? large.content() : sourceMode ? input.sourceElement.value : input.editor.getMarkdown(),
+    selection: () => (large ?? textarea).selection(),
     setContent(content) {
       if (isLargeDocument(content)) { enterReducedRendering(content); return }
       leaveReducedRendering()
@@ -127,6 +156,8 @@ export function createSourceModeController(input: {
     },
     setContentWithPosition(content) {
       if (isLargeDocument(content)) {
+        if (large) { large.setContent(content, true); return }
+        if (input.createLargeSurface) { enterReducedRendering(content); return }
         if (!sourceMode) { enterReducedRendering(content); return }
         const before = input.sourceElement.value
         const range = mapTextRange(before, content, input.sourceElement.selectionStart, input.sourceElement.selectionEnd)
@@ -208,6 +239,8 @@ export function createSourceModeController(input: {
     },
     onSourceInput(callback) { sourceListeners.add(callback); return () => sourceListeners.delete(callback) },
     dispose() {
+      destroyLarge()
+      setActiveSourceSurface(null)
       input.toggleButton.removeEventListener('click', handleClick)
       input.sourceElement.removeEventListener('input', handleInput)
       sourceListeners.clear()

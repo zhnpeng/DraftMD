@@ -94,3 +94,6 @@ body:not(.agent-dock-expanded) .agent-input-row { display: none; }
 .onboarding-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 24px 20px; }
 .onboarding-dialog button { min-height: 34px; padding: 0 13px; border: 1px solid var(--border-color); border-radius: 7px; background: transparent; color: var(--text-color); }
 .onboarding-dialog button.primary { background: var(--link-color); border-color: var(--link-color); color: var(--bg-color); }
+
+#large-source-editor { height: calc(100vh - 40px); width: calc(100% - var(--file-panel-space)); margin-left: var(--file-panel-space); }
+#large-source-editor[hidden] { display: none; }

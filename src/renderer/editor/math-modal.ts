@@ -1,4 +1,5 @@
 import { getEditorView } from './editor'
+import { getActiveSourceSurface } from './source-surface'
 import { msg } from '../../shared/i18n'
 
 export class MathModal {
@@ -88,6 +89,8 @@ export class MathModal {
   hide(): void {
     this.container.style.display = 'none'
     this.currentTarget = null
+    const active = getActiveSourceSurface()
+    if (active) { active.focus(); return }
     const sourceEditor = this.getSourceEditor()
     if (sourceEditor) {
       sourceEditor.focus()
@@ -100,6 +103,12 @@ export class MathModal {
   private save(): void {
     const value = this.input.value.trim()
     const isBlock = this.isBlockCheckbox.checked
+    const active = getActiveSourceSurface()
+    if (active && this.currentTarget === null) {
+      if (value) active.replaceSelection(isBlock ? `\n$$\n${value}\n$$\n` : `$${value}$`)
+      this.hide()
+      return
+    }
     const sourceEditor = this.getSourceEditor()
 
     if (sourceEditor && this.currentTarget === null) {

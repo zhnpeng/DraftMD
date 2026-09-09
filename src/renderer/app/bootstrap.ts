@@ -6,6 +6,7 @@ import { detectLocale, msg, setLocale, type Locale, type MessageKey, type Messag
 import type { DraftMDAPI, Unsubscribe } from '../../shared/contracts'
 import { createDocumentController } from './document-controller'
 import { createFilePanelController } from './file-panel-controller'
+import { createLargeSourceSurface } from '../editor/large-source-loader'
 import { createSourceModeController, runVisualExport } from './source-mode-controller'
 import { createUpdateBannerController } from './update-banner-controller'
 import { createAgentDockApp } from '../agent/agent-dock-app'
@@ -89,6 +90,7 @@ export async function bootstrapRenderer(api: DraftMDAPI = window.draftmd): Promi
     filePanel?.scheduleOutlineUpdate()
   })
   const source = createSourceModeController({
+    createLargeSurface: (content, onInput) => createLargeSourceSurface(required('large-source-editor'), content, onInput),
     editorElement, sourceElement, toggleButton: required('source-toggle-btn'),
     editor: { getMarkdown, setMarkdown },
     documentGeneration: () => documentController?.generation() ?? 0,
@@ -101,7 +103,7 @@ export async function bootstrapRenderer(api: DraftMDAPI = window.draftmd): Promi
   documentController = createDocumentController({
     api, source, titleElement: required('file-title'), saveStatusElement: required('save-status'),
     onGenerationChanged: setMermaidGeneration,
-    onContentChanged: () => { updateWordCount(wordCountElement, source.currentContent(), source.isReducedRendering()); filePanel?.scheduleOutlineUpdate() },
+    onContentChanged: () => { updateWordCount(wordCountElement, source.isReducedRendering() ? '' : source.currentContent(), source.isReducedRendering()); filePanel?.scheduleOutlineUpdate() },
     onPathChanged: () => { filePanel?.updateVisibility(); void filePanel?.refresh() },
   })
   setMermaidGeneration(documentController.generation())
@@ -114,7 +116,7 @@ export async function bootstrapRenderer(api: DraftMDAPI = window.draftmd): Promi
   })
   listeners.push(source.onSourceInput(() => {
     documentController.markDirty()
-    updateWordCount(wordCountElement, source.currentContent(), source.isReducedRendering())
+    updateWordCount(wordCountElement, source.isReducedRendering() ? '' : source.currentContent(), source.isReducedRendering())
     filePanel.scheduleOutlineUpdate()
   }))
   updateWordCount(wordCountElement, source.currentContent())
@@ -136,7 +138,7 @@ export async function bootstrapRenderer(api: DraftMDAPI = window.draftmd): Promi
       const markdown = source.currentContent()
       if (source.isSourceMode()) return captureSourceSelection({
         workspaceId, path, version, content: markdown,
-        start: sourceElement.selectionStart, end: sourceElement.selectionEnd,
+        start: source.selection().anchor, end: source.selection().head,
       })
       const visual = getVisualSelectionMarkdown()
       if (!visual) return null
@@ -167,7 +169,7 @@ export async function bootstrapRenderer(api: DraftMDAPI = window.draftmd): Promi
     api.onOpenDiagnostics(() => { void diagnostics.show() }),
     api.onOpenProviderSettings(() => { void providerSettings.show() }),
     api.onFocusAgentDock(() => agentDock.dock.focusInput()),
-    api.onToggleFilePanel(() => filePanel.toggle()), api.onToggleSourceMode(() => { source.toggle(); updateWordCount(wordCountElement, source.currentContent(), source.isReducedRendering()); filePanel.scheduleOutlineUpdate() }),
+    api.onToggleFilePanel(() => filePanel.toggle()), api.onToggleSourceMode(() => { source.toggle(); updateWordCount(wordCountElement, source.isReducedRendering() ? '' : source.currentContent(), source.isReducedRendering()); filePanel.scheduleOutlineUpdate() }),
     api.onWorkspaceOpened((workspace) => { currentWorkspaceId = workspace.id; void filePanel.workspaceOpened(); void agentDock.refreshWorkspace(workspace.id) }),
     api.onWorkspaceFilesChanged(() => { void filePanel.refresh() }),
     api.onMenuOpen(() => { void api.openFile() }),

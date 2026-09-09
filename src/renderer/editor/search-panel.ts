@@ -1,5 +1,6 @@
 import { Decoration, DecorationSet } from '@milkdown/kit/prose/view'
 import { getEditorView, searchPluginKey } from './editor'
+import { getActiveSourceSurface, type SourceSurface } from './source-surface'
 import { msg } from '../../shared/i18n'
 
 export class SearchPanel {
@@ -141,12 +142,15 @@ export class SearchPanel {
     this.updateCount()
   }
 
-  private getSourceEditor(): HTMLTextAreaElement | null {
+  private getSourceEditor(): SourceSurface | null {
+    const active = getActiveSourceSurface()
+    if (active) return active
     const sourceEditor = document.getElementById('source-editor') as HTMLTextAreaElement | null
-    return sourceEditor?.classList.contains('visible') ? sourceEditor : null
+    if (!sourceEditor?.classList.contains('visible')) return null
+    return { content: () => sourceEditor.value, selection: () => ({ anchor: sourceEditor.selectionStart, head: sourceEditor.selectionEnd }), select: (a, h) => sourceEditor.setSelectionRange(a, h), replaceSelection: text => { sourceEditor.setRangeText(text); sourceEditor.dispatchEvent(new Event('input', { bubbles: true })) }, focus: () => sourceEditor.focus() }
   }
 
-  private searchSourceEditor(query: string, sourceEditor: HTMLTextAreaElement): void {
+  private searchSourceEditor(query: string, sourceEditor: SourceSurface): void {
     this.clearDecorations()
     this.matches = []
     this.currentIndex = -1
@@ -157,7 +161,7 @@ export class SearchPanel {
     }
 
     const lowerQuery = query.toLowerCase()
-    const text = sourceEditor.value.toLowerCase()
+    const text = sourceEditor.content().toLowerCase()
     let idx = 0
     while ((idx = text.indexOf(lowerQuery, idx)) !== -1) {
       this.matches.push({ from: idx, to: idx + query.length })
@@ -241,11 +245,11 @@ export class SearchPanel {
     }
   }
 
-  private selectSourceMatch(sourceEditor: HTMLTextAreaElement): void {
+  private selectSourceMatch(sourceEditor: SourceSurface): void {
     if (this.currentIndex < 0 || this.currentIndex >= this.matches.length) return
     const match = this.matches[this.currentIndex]
     sourceEditor.focus()
-    sourceEditor.setSelectionRange(match.from, match.to)
+    sourceEditor.select(match.from, match.to)
     this.input.focus()
   }
 }
