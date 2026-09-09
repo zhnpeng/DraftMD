@@ -23,7 +23,7 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npx playwright test --config playwright.performance.config.ts layout-attribution.spec.ts
+      - run: npx playwright test --config playwright.performance.config.ts virtual-source-proof.spec.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:
