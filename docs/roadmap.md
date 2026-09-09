@@ -20,7 +20,8 @@ The owner completed personal use and authorized a fresh unsigned macOS-only regu
 - Add Responses API alongside Chat Completions, provider-aware model suggestions and model-list synchronization.
 - Move the Agent into a resizable right sidebar and keep exported documents free of application chrome.
 - Add per-provider reasoning effort with model-aware choices, persistence and matching capability probes.
-- Automatically reveal the root file list when opening a workspace, while preserving manual collapse during background refreshes; restore Open Folder when all macOS windows are closed.
+- Automatically reveal the root file list when opening a workspace, while preserving manual collapse during background refreshes.
+- Keep multi-megabyte source editing responsive with a lazy-loaded viewport-rendered text surface while preserving exact content and the existing save/conflict pipeline; restore Open Folder when all macOS windows are closed.
 - Include Windows x64 runtime adaptation, native packaging and candidate CI in source only. Windows runtime/installer acceptance remains outstanding; see [Windows acceptance](windows.md).
 
 ## 0.1.0 Maintenance History
